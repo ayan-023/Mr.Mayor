@@ -1,3 +1,4 @@
+import { ErrorBoundary } from '../common/ErrorBoundary';
 /**
  * MR. MAYOR - AI Infrastructure Analysis Center (Flagship Module)
  * Central Intelligence & Decision-Support Command Center (Spec Sections 1 - 60)

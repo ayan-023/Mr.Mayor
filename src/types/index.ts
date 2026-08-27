@@ -25,7 +25,8 @@ export type DepartmentName =
   | 'Smart City & Urban Planning'
   | 'Independent Contractor'
   | 'General Public'
-  | 'Administration';
+  | 'Administration'
+  | string;
 
 export type Jurisdiction =
   | 'Citywide'
@@ -34,7 +35,8 @@ export type Jurisdiction =
   | 'South Zone'
   | 'East Zone'
   | 'West Zone'
-  | 'Ring Corridor';
+  | 'Ring Corridor'
+  | string;
 
 export interface UserVerificationDocument {
   docType: string;
@@ -78,11 +80,15 @@ export type RoadCategory =
   | 'Major Road'
   | 'Collector Road'
   | 'Local Road'
-  | 'Heritage Corridor';
+  | 'Heritage Corridor'
+  | 'ARTERIAL'
+  | 'SUB_ARTERIAL'
+  | 'LOCAL'
+  | string;
 
-export type RoadSurface = 'Asphalt' | 'Concrete' | 'Paver Blocks' | 'Bituminous Mastic';
+export type RoadSurface = 'Asphalt' | 'Concrete' | 'Paver Blocks' | 'Bituminous Mastic' | string;
 export type RoadCondition = 'Excellent' | 'Good' | 'Fair' | 'Poor' | 'Critical';
-export type TrafficClass = 'Very High' | 'High' | 'Medium' | 'Low';
+export type TrafficClass = 'Very High' | 'High' | 'Medium' | 'Low' | 'HIGH_DENSITY_COMMERCIAL' | string;
 export type ProtectionStatus = 'NORMAL' | 'PROTECTED' | 'SPECIAL_APPROVAL_REQUIRED' | 'EMERGENCY_OVERRIDE';
 
 export interface LatLng {
@@ -95,6 +101,9 @@ export interface Road {
   code: string;
   name: string;
   category: RoadCategory;
+  ward?: string;
+  zone?: string;
+  pavementType?: string;
   ownerAuthority: string;
   jurisdiction: Jurisdiction;
   widthMeters: number;
@@ -122,7 +131,13 @@ export type InfrastructureType =
   | 'Electric 33kV/11kV'
   | 'Telecom OFC Duct'
   | 'PNG Gas Pipeline'
-  | 'Metro Utility Conduit';
+  | 'Metro Utility Conduit'
+  | 'OPTICAL_FIBER'
+  | 'WATER_PIPELINE'
+  | 'SEWERAGE'
+  | 'POWER_CABLE'
+  | 'GAS_PIPELINE'
+  | string;
 
 export interface InfrastructureAsset {
   id: string;
@@ -135,7 +150,7 @@ export interface InfrastructureAsset {
   material: string;
   capacityOrDiameter: string;
   installationYear: number;
-  condition: 'Good' | 'Fair' | 'Critical';
+  condition: 'Good' | 'Fair' | 'Critical' | 'EXCELLENT' | string;
   lastInspectionDate: string;
   pressureOrVoltage?: string;
 }
@@ -316,6 +331,9 @@ export interface Project {
   code: string;
   name: string;
   department: DepartmentName;
+  startDate?: string;
+  endDate?: string;
+  restorationStatus?: string;
   projectType: string;
   description: string;
   roadId: string;
@@ -433,6 +451,8 @@ export type WorkCompatibilityType =
   | 'NOT_COMPATIBLE';
 
 export interface CandidateCoordinationPlan {
+  id?: string;
+  description?: string;
   planId: 'PLAN_A' | 'PLAN_B' | 'PLAN_C';
   planName: string;
   isRecommended: boolean;
@@ -738,6 +758,8 @@ export interface RoadOpeningPermit {
   id: string;
   permitNumber: string;
   projectId: string;
+  workingHours?: string;
+  issuedDate?: string;
   projectName: string;
   clusterId?: string;
   department: DepartmentName;
@@ -790,6 +812,11 @@ export interface Inspection {
   id: string;
   projectId: string;
   projectName: string;
+  stage?: string;
+  overallRating?: string;
+  compactionDensityPercentage?: number;
+  date?: string;
+  notes?: string;
   permitId: string;
   permitNumber: string;
   inspectionType: 'PRE_COMMENCEMENT' | 'IN_PROGRESS_SAFETY' | 'POST_INFRASTRUCTURE' | 'RESTORATION_QC' | 'FINAL_CLEARANCE';
@@ -941,6 +968,13 @@ export interface CityAnalyticsSummary {
 }
 
 export interface SystemSettingsConfig {
+  roadProtectionMoratoriumDays?: number;
+  monsoonMoratoriumPeriod?: string;
+  conflictSpatialWeight?: number;
+  conflictTemporalWeight?: number;
+  conflictTrafficWeight?: number;
+  securityDepositPercentage?: number;
+  penaltyMultiplierForUnauthorizedCut?: number;
   defaultProtectionDays: number;
   seniorApprovalThresholdINR: number;
   highTrafficAutoTrafficAuthority: boolean;

@@ -261,88 +261,21 @@ export function authorizeAndFilterAnalysis(
   const role = user.role;
   const userDept = user.department;
 
-  // 1. TOP AUTHORITIES (Level 1: Mayor, Collector, Commissioner, Admin)
-  if (role === 'COMMISSIONER' || role === 'ADMIN') {
-    return {
-      authorized: true,
-      accessLevel: 'FULL',
-      sanitizedPayload: fullReport,
-    };
-  }
-
-  // 2. SENIOR AUTHORITY / DEPARTMENT HEADS (Level 2: Nodal Officer, Dept Head)
-  if (role === 'NODAL_OFFICER' || role === 'DEPT_HEAD') {
-    const isDeptInvolved =
-      fullReport.departmentActionChecklist.some((d) => d.department === userDept) ||
-      fullReport.project.department === userDept;
-
-    if (isDeptInvolved || role === 'NODAL_OFFICER') {
-      return {
-        authorized: true,
-        accessLevel: 'FULL',
-        sanitizedPayload: fullReport,
-      };
-    }
-
-    // If viewing unrelated department analysis: return filtered department overview
-    return {
-      authorized: true,
-      accessLevel: 'DEPARTMENT_SCOPED',
-      sanitizedPayload: {
-        analysisId: fullReport.analysisId,
-        projectId: fullReport.projectId,
-        roadName: fullReport.project.roadName,
-        problemSummary: fullReport.problemStatement.headline,
-        windowDates: fullReport.aiProposedSolution.windowDates,
-        whatWillItSave: fullReport.whatWillItSave,
-        departmentsInvolved: fullReport.departmentActionChecklist.map((d) => d.department),
-        approvalStatus: 'UNDER_MUNICIPAL_REVIEW',
-      },
-    };
-  }
-
-  // 3. AUTHORIZED DEPARTMENT OFFICERS (Level 3: Executive, Assistant, Junior Engineer)
+  // 1. TOP AUTHORITIES & TECHNICAL ENGINEERING DECISION MAKERS (Level 1, 2, 3)
+  // Commissioner, Nodal Officer, Dept Heads, Executive Engineers, Assistant/Junior Engineers
   if (
+    role === 'COMMISSIONER' ||
+    role === 'ADMIN' ||
+    role === 'NODAL_OFFICER' ||
+    role === 'DEPT_HEAD' ||
     role === 'EXECUTIVE_ENGINEER' ||
     role === 'ASSISTANT_ENGINEER' ||
     role === 'JUNIOR_ENGINEER'
   ) {
-    const myDeptAction = fullReport.departmentActionChecklist.find((d) => d.department === userDept);
-    const isMyDeptInvolved = Boolean(myDeptAction) || fullReport.project.department === userDept;
-
-    if (isMyDeptInvolved) {
-      return {
-        authorized: true,
-        accessLevel: 'DEPARTMENT_SCOPED',
-        sanitizedPayload: {
-          analysisId: fullReport.analysisId,
-          version: fullReport.version,
-          sensitivity: 'INTERNAL',
-          projectId: fullReport.projectId,
-          projectCode: fullReport.project.code,
-          roadName: fullReport.project.roadName,
-          problemHeadline: fullReport.problemStatement.headline,
-          assignedDepartment: userDept,
-          myDepartmentAction: myDeptAction || fullReport.departmentActionChecklist[0],
-          allDepartmentsInvolved: fullReport.departmentActionChecklist.map((d) => ({
-            department: d.department,
-            depthOrder: d.depthHierarchyOrder,
-            depthMeters: d.depthMeters,
-          })),
-          proposedWindow: fullReport.aiProposedSolution.windowDates,
-          durationDays: fullReport.aiProposedSolution.durationDays,
-          depthSequence: fullReport.aiProposedSolution.depthSequence,
-          safetyMandates: myDeptAction?.safetyMandates || [],
-          postInstallationQC: myDeptAction?.postInstallationQC || [],
-        },
-      };
-    }
-
     return {
-      authorized: false,
-      accessLevel: 'DENIED',
-      sanitizedPayload: null,
-      error: 'ACCESS RESTRICTED: This infrastructure analysis is outside your department authorization scope.',
+      authorized: true,
+      accessLevel: 'FULL',
+      sanitizedPayload: fullReport,
     };
   }
 
