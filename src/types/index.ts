@@ -54,6 +54,8 @@ export interface User {
   email: string;
   role: UserRole;
   designation: string;
+  departmentId?: string;
+  departmentName?: DepartmentName;
   department: DepartmentName | 'Administration' | 'General Public' | 'Independent Contractor';
   jurisdiction: Jurisdiction;
   permissions: string[];
@@ -331,6 +333,15 @@ export interface Project {
   code: string;
   name: string;
   department: DepartmentName;
+  projectOwnerDepartmentId?: string;
+  projectOwnerDepartmentName?: DepartmentName;
+  projectLeadUserId?: string;
+  executionStrategy?: ExecutionStrategy;
+  coordinationCaseId?: string;
+  coordinationCaseNumber?: string;
+  executionStages?: ProjectExecutionStage[];
+  contractorAllocation?: ContractorAllocationRecord;
+  auditTimeline?: AuditTimelineEvent[];
   startDate?: string;
   endDate?: string;
   restorationStatus?: string;
@@ -1034,3 +1045,144 @@ export interface CityConnectionRequest {
   department: DepartmentName | 'Administration' | 'Independent Contractor';
 }
 
+
+
+// ============================================================
+// MR. MAYOR - UNIFIED WORKFLOW & COORDINATION CASE TYPES
+// ============================================================
+
+export type ExecutionStrategy = 'STANDALONE' | 'COORDINATED' | 'HOLD';
+
+export type CoordinationCaseStatus =
+  | 'DETECTED'
+  | 'AI_ANALYZED'
+  | 'UNDER_TECHNICAL_REVIEW'
+  | 'TECHNICAL_PROPOSED'
+  | 'LEADERSHIP_REVIEW'
+  | 'APPROVED'
+  | 'CONTRACTOR_ALLOCATED'
+  | 'IN_EXECUTION'
+  | 'ALL_STAGES_COMPLETED'
+  | 'FINAL_QC_PASSED'
+  | 'RESTORATION_VERIFIED'
+  | 'COMPLETED'
+  | 'CLOSED'
+  | 'REJECTED'
+  | 'ON_HOLD';
+
+export interface ProjectExecutionStage {
+  stageId: string;
+  name: string;
+  sequence: number;
+  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED_PENDING_QC' | 'QC_IN_PROGRESS' | 'QC_PASSED' | 'REWORK_REQUIRED';
+  startedAt?: string;
+  completedAt?: string;
+  completedBy?: string;
+  evidencePhotos?: string[];
+  workDoneNotes?: string;
+  qcInspectorId?: string;
+  qcInspectorName?: string;
+  qcAssignedAt?: string;
+  qcCompletedAt?: string;
+  qcResult?: 'PASS' | 'FAIL' | 'CONDITIONAL_PASS';
+  qcRemarks?: string;
+  qcChecklist?: Array<{ item: string; passed: boolean; note?: string }>;
+}
+
+export interface ContractorAllocationRecord {
+  contractorId: string;
+  contractorName: string;
+  specialization: string;
+  assignedAt: string;
+  assignedBy: string;
+  workScope: string;
+  performanceRating?: number;
+  status: 'ASSIGNED' | 'SITE_MOBILIZED' | 'WORK_IN_PROGRESS' | 'STAGES_COMPLETED';
+}
+
+export interface DepartmentConcurrenceRecord {
+  departmentId: string;
+  departmentName: DepartmentName;
+  isOwner: boolean;
+  concurrenceStatus: 'PENDING' | 'CONCURRED' | 'CONCERNS_RAISED' | 'REJECTED';
+  officerName?: string;
+  officerDesignation?: string;
+  officerUserId?: string;
+  concurrenceNotes?: string;
+  timestamp?: string;
+}
+
+export interface AuditTimelineEvent {
+  id: string;
+  timestamp: string;
+  actorId: string;
+  actorName: string;
+  actorRole: string;
+  actorDepartment: string;
+  stage: string;
+  action: string;
+  details: string;
+  badgeColor?: string;
+}
+
+export interface CoordinationCase {
+  id: string;
+  caseNumber: string;
+  corridorName: string;
+  roadId: string;
+  roadName: string;
+  status: CoordinationCaseStatus;
+  primaryProjectId: string;
+  primaryProjectName?: string;
+  relatedProjectIds: string[];
+  relatedProjects?: Project[];
+  participatingDepartments: DepartmentConcurrenceRecord[];
+  recommendedStrategy: ExecutionStrategy;
+  selectedStrategy: ExecutionStrategy;
+  strategyDecisionReason?: string;
+  technicalDecision?: {
+    decision: 'PROCEED_COORDINATED' | 'PROCEED_STANDALONE' | 'HOLD_REANALYZE' | 'PROPOSE_LEADERSHIP';
+    reviewerId: string;
+    reviewerName: string;
+    reviewerRole: string;
+    reviewerDepartment: DepartmentName;
+    timestamp: string;
+    notes: string;
+    conditions?: string[];
+  };
+  leadershipDecision?: {
+    decision: 'APPROVED' | 'REJECTED' | 'RETURNED_FOR_REVISION';
+    approverId: string;
+    approverName: string;
+    approverRole: string;
+    designation: string;
+    timestamp: string;
+    remarks: string;
+    digitalSignatureStamp: string;
+    conditions?: string[];
+  };
+  executionWindow: {
+    startDate: string;
+    endDate: string;
+    durationDays: number;
+  };
+  executionSequence: string[];
+  candidatePlans: CandidateCoordinationPlan[];
+  selectedPlanId: 'PLAN_A' | 'PLAN_B' | 'PLAN_C';
+  aiAnalysisId?: string;
+  aiConfidence: number;
+  aiSummary?: string;
+  projectedCostSavedINR: number;
+  projectedExcavationsAvoided: number;
+  verifiedCostSavedINR: number;
+  verifiedExcavationsAvoided: number;
+  trafficDisruptionReductionPct: number;
+  dataLimitations: string[];
+  stages: ProjectExecutionStage[];
+  contractorAllocations: ContractorAllocationRecord[];
+  qcInspections: Inspection[];
+  auditTimeline: AuditTimelineEvent[];
+  createdAt: string;
+  createdBy: string;
+  updatedAt: string;
+}

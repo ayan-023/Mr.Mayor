@@ -4,6 +4,7 @@
 
 import {
   User,
+  CoordinationCase,
   Road,
   InfrastructureAsset,
   Project,
@@ -458,6 +459,97 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+
+  // Coordination Cases & Full Lifecycle Methods
+  getCoordinationCases: (bypassCache = true) =>
+    fetchJson<{ success: boolean; count: number; cases: CoordinationCase[] }>('/coordination-cases', undefined, bypassCache),
+
+  getCoordinationCaseById: (id: string, bypassCache = true) =>
+    fetchJson<{ success: boolean; case: CoordinationCase }>(`/coordination-cases/${id}`, undefined, bypassCache),
+
+  createCoordinationCase: (data: Partial<CoordinationCase>) => {
+    clearApiCache();
+    return fetchJson<{ success: boolean; case: CoordinationCase }>('/coordination-cases', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  getContractors: () =>
+    fetchJson<{ success: boolean; count: number; contractors: any[] }>('/contractors'),
+
+  recordCaseStrategy: (id: string, data: { strategy: string; planId?: string; userId: string; reason?: string }) => {
+    clearApiCache();
+    return fetchJson<{ success: boolean; message: string; case: CoordinationCase }>(`/coordination-cases/${id}/strategy`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  recordDepartmentConcurrence: (id: string, data: { departmentName?: string; status: string; notes?: string; userId: string }) => {
+    clearApiCache();
+    return fetchJson<{ success: boolean; message: string; case: CoordinationCase }>(`/coordination-cases/${id}/concurrence`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  proposeCaseToLeadership: (id: string, data: { userId: string; notes?: string }) => {
+    clearApiCache();
+    return fetchJson<{ success: boolean; message: string; case: CoordinationCase }>(`/coordination-cases/${id}/propose-leadership`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  recordLeadershipDecision: (id: string, data: { decision: string; remarks?: string; userId: string; signatureStamp?: string }) => {
+    clearApiCache();
+    return fetchJson<{ success: boolean; message: string; case: CoordinationCase }>(`/coordination-cases/${id}/leadership-decision`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  allocateContractor: (id: string, data: { contractorId: string; contractorName: string; specialization?: string; workScope?: string; userId: string }) => {
+    clearApiCache();
+    return fetchJson<{ success: boolean; message: string; entity: any }>(`/coordination-cases/${id}/allocate-contractor`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateExecutionStage: (id: string, stageId: string, data: { status: string; notes?: string; photos?: string[]; userId: string }) => {
+    clearApiCache();
+    return fetchJson<{ success: boolean; message: string; stage: any }>(`/coordination-cases/${id}/stages/${stageId}/update`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  assignStageQC: (id: string, stageId: string, data: { inspectorId?: string; inspectorName?: string; userId: string }) => {
+    clearApiCache();
+    return fetchJson<{ success: boolean; message: string; stage: any }>(`/coordination-cases/${id}/stages/${stageId}/assign-qc`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  recordStageQCDecision: (id: string, stageId: string, data: { result: string; remarks?: string; checklist?: any[]; userId: string }) => {
+    clearApiCache();
+    return fetchJson<{ success: boolean; message: string; stage: any; nextStageUnlocked: boolean; allCompleted: boolean }>(`/coordination-cases/${id}/stages/${stageId}/qc-decision`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  finalizeCaseClosure: (id: string, data: { userId: string }) => {
+    clearApiCache();
+    return fetchJson<{ success: boolean; message: string; historyItem: any }>(`/coordination-cases/${id}/finalize-closure`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
 
   // Cities & Portals
   getCities: () =>

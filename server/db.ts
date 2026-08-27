@@ -22,6 +22,13 @@ import {
   SystemSettingsConfig,
   CityPortalConfig,
   CityConnectionRequest,
+  CoordinationCase,
+  ProjectExecutionStage,
+  ContractorAllocationRecord,
+  DepartmentConcurrenceRecord,
+  AuditTimelineEvent,
+  ExecutionStrategy,
+  DepartmentName,
 } from '../src/types/index.js';
 
 export interface DatabaseState {
@@ -31,6 +38,8 @@ export interface DatabaseState {
   projects: Project[];
   conflicts: Conflict[];
   clusters: CoordinationCluster[];
+  coordinationCases: CoordinationCase[];
+  contractors: any[];
   workflows: ApprovalWorkflow[];
   permits: RoadOpeningPermit[];
   inspections: Inspection[];
@@ -41,6 +50,298 @@ export interface DatabaseState {
   auditLogs: AuditLogItem[];
   settings: SystemSettingsConfig;
 }
+
+
+export function generateDefaultExecutionStages(roadName?: string): ProjectExecutionStage[] {
+  return [
+    {
+      stageId: 'STAGE-1-PREP',
+      name: 'Site Preparation & Safety Barricading',
+      sequence: 1,
+      status: 'NOT_STARTED',
+      workDoneNotes: 'Erect IRC:SP:55 compliant retro-reflective barricades, solar flashers, and traffic diversion signages.',
+    },
+    {
+      stageId: 'STAGE-2-TRENCH',
+      name: 'Trench Excavation & Subsurface Clearance',
+      sequence: 2,
+      status: 'NOT_STARTED',
+      workDoneNotes: 'Micro-trenching / JCB saw-cutting along approved alignment with GPR subsurface radar scanning.',
+    },
+    {
+      stageId: 'STAGE-3-INSTALL',
+      name: 'Utility Infrastructure Installation & Jointing',
+      sequence: 3,
+      status: 'NOT_STARTED',
+      workDoneNotes: 'Laying approved conduits / ductile iron water mains / MDPE gas pipes at specified statutory depths.',
+    },
+    {
+      stageId: 'STAGE-4-TEST',
+      name: 'Hydrostatic / Continuity Testing & Inspection',
+      sequence: 4,
+      status: 'NOT_STARTED',
+      workDoneNotes: 'Pressure testing, optical OTDR continuity test, and joint integrity sign-off.',
+    },
+    {
+      stageId: 'STAGE-5-BACKFILL',
+      name: 'Layered Backfilling & 95%+ Proctor Compaction',
+      sequence: 5,
+      status: 'NOT_STARTED',
+      workDoneNotes: 'Granular sub-base (GSB) layering with plate compactor and heavy tandem roller testing.',
+    },
+    {
+      stageId: 'STAGE-6-RESTORE',
+      name: 'Pavement Surface Restoration & Asphalting',
+      sequence: 6,
+      status: 'NOT_STARTED',
+      workDoneNotes: 'Bituminous concrete / M40 grade cement concrete surface relaying and road reopening.',
+    },
+  ];
+}
+
+export const INITIAL_CONTRACTORS = [
+  {
+    contractorId: 'CTR-NSK-01',
+    contractorName: 'M/s InfraTech Construction Ltd.',
+    specialization: 'Multi-Utility Micro-Trenching & Smart City OFC',
+    capacity: '8 Active Teams',
+    activeProjectsCount: 2,
+    rating: 4.8,
+    complianceScore: 98,
+    phone: '+91 98221 44550',
+    email: 'ops@infratech-nashik.in',
+  },
+  {
+    contractorId: 'CTR-NSK-02',
+    contractorName: 'Ashoka Buildcon Ltd. (Nashik)',
+    specialization: 'Highway Expansion & PWD Bituminous Road Restoration',
+    capacity: '15 Heavy Machinery Crews',
+    activeProjectsCount: 3,
+    rating: 4.9,
+    complianceScore: 99,
+    phone: '+91 253 222 6677',
+    email: 'projects@ashokabuildcon.com',
+  },
+  {
+    contractorId: 'CTR-NSK-03',
+    contractorName: 'M/s Godavari Deep Utilities & Trenching',
+    specialization: 'Deep Water Mains (2.5m+) & Heavy Stormwater Culverts',
+    capacity: '6 Hydraulic Excavator Units',
+    activeProjectsCount: 1,
+    rating: 4.7,
+    complianceScore: 95,
+    phone: '+91 94222 88991',
+    email: 'contracts@godavariutilities.in',
+  },
+  {
+    contractorId: 'CTR-NSK-04',
+    contractorName: 'M/s Western Gas Infrastructure Services',
+    specialization: 'High-Safety MDPE Gas Pipelines & Fusion Jointing',
+    capacity: '5 Specialized Fusion Teams',
+    activeProjectsCount: 1,
+    rating: 4.9,
+    complianceScore: 99,
+    phone: '+91 98900 11223',
+    email: 'gas.projects@westerngas.in',
+  },
+];
+
+export const INITIAL_COORDINATION_CASES: CoordinationCase[] = [
+  {
+    id: 'cc-nsk-001',
+    caseNumber: 'CC-NSK-2026-001',
+    corridorName: 'Gangapur Road Multi-Agency Coordination Corridor',
+    roadId: 'RD-NSK-02',
+    roadName: 'Gangapur Road Arterial Corridor (CBS to Someshwar Water Works)',
+    status: 'AI_ANALYZED',
+    primaryProjectId: 'PROJ-NSK-2026-04',
+    primaryProjectName: 'Gangapur Road 400mm Feeder Pipeline Replacement',
+    relatedProjectIds: ['PROJ-NSK-2026-03', 'PROJ-NSK-2026-04', 'PROJ-NSK-2026-05'],
+    participatingDepartments: [
+      {
+        departmentId: 'DEPT-WATER',
+        departmentName: 'Water & Sewerage',
+        isOwner: true,
+        concurrenceStatus: 'PENDING',
+        officerName: 'Er. Sanjay Shinde',
+        officerDesignation: 'Executive Engineer (Water Supply)',
+        officerUserId: 'usr-nsk-03',
+        concurrenceNotes: 'Lead utility owner. 400mm DI water main requiring 2.5m depth bedding.',
+      },
+      {
+        departmentId: 'DEPT-GAS',
+        departmentName: 'City Gas Distribution',
+        isOwner: false,
+        concurrenceStatus: 'PENDING',
+        officerName: 'Er. Prashant Wagh',
+        officerDesignation: 'CPM (MNGL Gas)',
+        officerUserId: 'usr-nsk-03c',
+        concurrenceNotes: '125mm MDPE gas line at 1.8m depth, offset 0.8m from water line.',
+      },
+      {
+        departmentId: 'DEPT-TELECOM',
+        departmentName: 'Telecom & Digital',
+        isOwner: false,
+        concurrenceStatus: 'PENDING',
+        officerName: 'Er. Priya Sharma',
+        officerDesignation: 'Chief Telecom Officer (BSNL)',
+        officerUserId: 'usr-nsk-03d',
+        concurrenceNotes: '8-way HDPE telecom duct at 1.2m depth.',
+      },
+    ],
+    recommendedStrategy: 'COORDINATED',
+    selectedStrategy: 'COORDINATED',
+    strategyDecisionReason: 'High temporal overlap (45 days) and spatial collinearity on Gangapur Road corridor. Single-trench joint excavation avoids 2 independent road cuts and saves ₹1.26 Cr.',
+    executionWindow: {
+      startDate: '2026-08-01T00:00:00.000Z',
+      endDate: '2026-09-25T00:00:00.000Z',
+      durationDays: 55,
+    },
+    executionSequence: [
+      'Stage 1: Common Corridor Safety Barricading & Traffic Diversion (PWD & Traffic Police)',
+      'Stage 2: Single-Window Deep Trench Excavation (Water & Drainage - 2.5m depth)',
+      'Stage 3: 400mm Water Main Laying & Bedding (Water Supply)',
+      'Stage 4: Intermediate Backfill & Gas Pipeline Installation (MNGL - 1.8m depth)',
+      'Stage 5: Upper Trench Backfill & Telecom 8-Way OFC Duct Laying (BSNL - 1.2m depth)',
+      'Stage 6: Final 95%+ Proctor Compaction & Unified Asphalt Pavement Restoration (PWD)',
+    ],
+    candidatePlans: [
+      {
+        planId: 'PLAN_A',
+        planName: 'Plan A: Unified Multi-Agency Single-Window Excavation (Recommended)',
+        isRecommended: true,
+        strategySummary: 'Shared single trench, sequential depth laying from deepest (Water 2.5m) to shallowest (Telecom 1.2m), followed by a single M40 bituminous restoration.',
+        startDate: '2026-08-01',
+        endDate: '2026-09-25',
+        totalDurationDays: 55,
+        sequenceSteps: [
+          'Unified Trench Excavation (0 to 2.5m depth)',
+          'Water Pipe Laying (2.5m)',
+          'Intermediate Backfill & Gas Pipe Laying (1.8m)',
+          'Telecom Duct Installation (1.2m)',
+          'Single Unified Road Surface Restoration',
+        ],
+        excavationEventsCount: 1,
+        restorationEventsCount: 1,
+        trafficDisruptionReductionPct: 62,
+        projectDelayDays: 0,
+        dependencySatisfied: true,
+        estimatedFinancialSavingINR: 12590000,
+        score: 96,
+        pros: [
+          'Saves ₹1.26 Cr in public restoration budget',
+          'Eliminates 2 redundant road cuts',
+          'Reduces citizen disruption period by 62%',
+          'Single consolidated contractor mobilization',
+        ],
+        cons: [
+          'Requires tight inter-agency alignment and common daily standups',
+        ],
+      },
+      {
+        planId: 'PLAN_B',
+        planName: 'Plan B: Phased Sequential Excavation with Immediate Trench Sharing',
+        isRecommended: false,
+        strategySummary: 'Water supply excavates first; Gas and Telecom join immediately before backfilling.',
+        startDate: '2026-08-01',
+        endDate: '2026-10-15',
+        totalDurationDays: 75,
+        sequenceSteps: [
+          'Water Main Trenching & Laying',
+          'Gas Pipeline Installation',
+          'Telecom OFC Laying',
+          'Final Restoration',
+        ],
+        excavationEventsCount: 2,
+        restorationEventsCount: 1,
+        trafficDisruptionReductionPct: 38,
+        projectDelayDays: 20,
+        dependencySatisfied: true,
+        estimatedFinancialSavingINR: 6800000,
+        score: 74,
+        pros: [
+          'Less dependency on simultaneous start date',
+          'Saves 1 restoration event',
+        ],
+        cons: [
+          'Higher total corridor closure duration (75 days vs 55 days)',
+          'Lower overall financial savings',
+        ],
+      },
+      {
+        planId: 'PLAN_C',
+        planName: 'Plan C: Isolated Standalone Excavation (Uncoordinated)',
+        isRecommended: false,
+        strategySummary: 'Each utility digs and restores independently across 6 months.',
+        startDate: '2026-08-01',
+        endDate: '2027-02-15',
+        totalDurationDays: 195,
+        sequenceSteps: [
+          'Water Dig & Restore (Aug - Sep)',
+          'Gas Dig & Restore (Oct - Nov)',
+          'Telecom Dig & Restore (Dec - Jan)',
+        ],
+        excavationEventsCount: 3,
+        restorationEventsCount: 3,
+        trafficDisruptionReductionPct: 0,
+        projectDelayDays: 0,
+        dependencySatisfied: false,
+        estimatedFinancialSavingINR: 0,
+        score: 25,
+        pros: ['Autonomous execution without cross-department coordination meetings'],
+        cons: [
+          'Severe road destruction: 3 repeated excavations within 6 months',
+          'Violates NMC 1-year Road Protection Moratorium',
+          'High risk of accidental utility strikes and citizen outrage',
+        ],
+      },
+    ],
+    selectedPlanId: 'PLAN_A',
+    aiConfidence: 94,
+    aiSummary: 'Optimal coordination candidate: 3 statutory agencies with collinear trench alignment on Gangapur Road corridor. Single-trench execution eliminates ₹1.26 Cr in repeated restoration expenditure.',
+    projectedCostSavedINR: 12590000,
+    projectedExcavationsAvoided: 2,
+    verifiedCostSavedINR: 0,
+    verifiedExcavationsAvoided: 0,
+    trafficDisruptionReductionPct: 62,
+    dataLimitations: [
+      'Traffic volume model based on CTTP 2016 baseline (V/C 1.14 on Gangapur Road).',
+      'Geotechnical depth cross-section subject to on-site GPR radar verification during Stage 2.',
+    ],
+    stages: generateDefaultExecutionStages('Gangapur Road'),
+    contractorAllocations: [],
+    qcInspections: [],
+    auditTimeline: [
+      {
+        id: 'AUD-CC-01',
+        timestamp: '2026-08-20T10:00:00.000Z',
+        actorId: 'SYSTEM',
+        actorName: 'MR. MAYOR Coordination Engine',
+        actorRole: 'SYSTEM_INTELLIGENCE',
+        actorDepartment: 'Smart City & Urban Planning',
+        stage: 'SYSTEM_ANALYSIS',
+        action: 'COORDINATION_OPPORTUNITY_DETECTED',
+        details: 'Cluster relationship identified for Water (PROJ-NSK-2026-04), Gas (PROJ-NSK-2026-03), and Telecom (PROJ-NSK-2026-05) on Gangapur Road.',
+        badgeColor: 'blue',
+      },
+      {
+        id: 'AUD-CC-02',
+        timestamp: '2026-08-20T10:05:00.000Z',
+        actorId: 'SYSTEM',
+        actorName: 'Gemini Civil Engineering Engine',
+        actorRole: 'AI_ANALYST',
+        actorDepartment: 'Smart City & Urban Planning',
+        stage: 'AI_ANALYSIS',
+        action: 'CANDIDATE_PLANS_SYNTHESIZED',
+        details: 'Synthesized Plan A (Unified Coordinated), Plan B (Phased), and Plan C (Standalone). Plan A recommended with 94% confidence.',
+        badgeColor: 'indigo',
+      },
+    ],
+    createdAt: '2026-08-20T10:00:00.000Z',
+    createdBy: 'SYSTEM_COORDINATION_ENGINE',
+    updatedAt: '2026-08-20T10:05:00.000Z',
+  },
+];
 
 // All users initialized to empty array for manual entry
 const INITIAL_USERS: User[] = [
@@ -2697,6 +2998,8 @@ export function buildCityDataset(city: CityPortalConfig): DatabaseState {
     projects: [],
     conflicts: [],
     clusters: [],
+    coordinationCases: [],
+    contractors: INITIAL_CONTRACTORS,
     workflows: [],
     permits: [],
     inspections: [
@@ -2771,6 +3074,8 @@ class DatabaseManager {
       projects: INITIAL_PROJECTS,
       conflicts: INITIAL_CONFLICTS,
       clusters: INITIAL_CLUSTERS,
+      coordinationCases: INITIAL_COORDINATION_CASES,
+      contractors: INITIAL_CONTRACTORS,
       workflows: INITIAL_WORKFLOWS,
       permits: INITIAL_PERMITS,
       inspections: [
@@ -3206,6 +3511,587 @@ class DatabaseManager {
   public updateSettings(settings: SystemSettingsConfig): void {
     this.state.settings = settings;
   }
+
+  // ============================================================
+  // COORDINATION CASES & UNIFIED WORKFLOW METHODS
+  // ============================================================
+
+  public getCoordinationCases(): CoordinationCase[] {
+    return this.state.coordinationCases || INITIAL_COORDINATION_CASES;
+  }
+
+  public getCoordinationCaseById(id: string): CoordinationCase | undefined {
+    return (this.state.coordinationCases || INITIAL_COORDINATION_CASES).find(
+      (c) => c.id === id || c.caseNumber === id || c.primaryProjectId === id || c.relatedProjectIds.includes(id)
+    );
+  }
+
+  public getContractors(): any[] {
+    return this.state.contractors || INITIAL_CONTRACTORS;
+  }
+
+  public createCoordinationCase(data: Partial<CoordinationCase>): CoordinationCase {
+    const newCase: CoordinationCase = {
+      id: data.id || `cc-nsk-${Date.now()}`,
+      caseNumber: data.caseNumber || `CC-NSK-2026-${String((this.state.coordinationCases || []).length + 1).padStart(3, '0')}`,
+      corridorName: data.corridorName || 'Multi-Agency Corridor',
+      roadId: data.roadId || 'RD-NSK-01',
+      roadName: data.roadName || 'City Corridor',
+      status: data.status || 'DETECTED',
+      primaryProjectId: data.primaryProjectId || '',
+      primaryProjectName: data.primaryProjectName || '',
+      relatedProjectIds: data.relatedProjectIds || [],
+      participatingDepartments: data.participatingDepartments || [],
+      recommendedStrategy: data.recommendedStrategy || 'COORDINATED',
+      selectedStrategy: data.selectedStrategy || 'COORDINATED',
+      strategyDecisionReason: data.strategyDecisionReason || '',
+      executionWindow: data.executionWindow || {
+        startDate: new Date().toISOString(),
+        endDate: new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString(),
+        durationDays: 60,
+      },
+      executionSequence: data.executionSequence || [],
+      candidatePlans: data.candidatePlans || [],
+      selectedPlanId: data.selectedPlanId || 'PLAN_A',
+      aiConfidence: data.aiConfidence || 90,
+      projectedCostSavedINR: data.projectedCostSavedINR || 0,
+      projectedExcavationsAvoided: data.projectedExcavationsAvoided || 0,
+      verifiedCostSavedINR: 0,
+      verifiedExcavationsAvoided: 0,
+      trafficDisruptionReductionPct: data.trafficDisruptionReductionPct || 50,
+      dataLimitations: data.dataLimitations || [],
+      stages: data.stages || generateDefaultExecutionStages(data.roadName),
+      contractorAllocations: data.contractorAllocations || [],
+      qcInspections: data.qcInspections || [],
+      auditTimeline: [
+        {
+          id: `AUD-CC-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          actorId: 'SYSTEM',
+          actorName: 'Coordination Engine',
+          actorRole: 'SYSTEM_INTELLIGENCE',
+          actorDepartment: 'Smart City & Urban Planning',
+          stage: 'SYSTEM_ANALYSIS',
+          action: 'CASE_INITIALIZED',
+          details: `Coordination case ${data.caseNumber} created with ${data.relatedProjectIds?.length || 1} related projects.`,
+          badgeColor: 'blue',
+        },
+      ],
+      createdAt: new Date().toISOString(),
+      createdBy: data.createdBy || 'SYSTEM',
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (!this.state.coordinationCases) {
+      this.state.coordinationCases = [];
+    }
+    this.state.coordinationCases.unshift(newCase);
+    return newCase;
+  }
+
+  public recordStrategyDecision(
+    caseId: string,
+    strategy: ExecutionStrategy,
+    planId: 'PLAN_A' | 'PLAN_B' | 'PLAN_C',
+    user: User,
+    reason?: string
+  ): CoordinationCase | undefined {
+    const c = this.getCoordinationCaseById(caseId);
+    if (!c) return undefined;
+
+    c.selectedStrategy = strategy;
+    c.selectedPlanId = planId;
+    c.strategyDecisionReason = reason || `Strategy ${strategy} confirmed by ${user.name} (${user.designation}).`;
+    c.status = 'UNDER_TECHNICAL_REVIEW';
+    c.technicalDecision = {
+      decision: strategy === 'COORDINATED' ? 'PROCEED_COORDINATED' : strategy === 'STANDALONE' ? 'PROCEED_STANDALONE' : 'HOLD_REANALYZE',
+      reviewerId: user.id,
+      reviewerName: user.name,
+      reviewerRole: user.role,
+      reviewerDepartment: user.department as DepartmentName,
+      timestamp: new Date().toISOString(),
+      notes: reason || 'Technical review completed.',
+    };
+
+    c.auditTimeline.unshift({
+      id: `AUD-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      actorId: user.id,
+      actorName: user.name,
+      actorRole: user.role,
+      actorDepartment: user.department,
+      stage: 'TECHNICAL_REVIEW',
+      action: 'STRATEGY_DECISION_RECORDED',
+      details: `Selected strategy: ${strategy} (${planId}). Reason: ${reason || 'Aligned with corridor schedule'}`,
+      badgeColor: 'amber',
+    });
+
+    for (const projId of [c.primaryProjectId, ...c.relatedProjectIds]) {
+      const proj = this.getProjectById(projId);
+      if (proj) {
+        proj.executionStrategy = strategy;
+        proj.coordinationCaseId = c.id;
+        proj.coordinationCaseNumber = c.caseNumber;
+        proj.status = 'UNDER_TECHNICAL_REVIEW';
+      }
+    }
+
+    c.updatedAt = new Date().toISOString();
+    return c;
+  }
+
+  public recordDepartmentConcurrence(
+    caseId: string,
+    departmentName: string,
+    status: 'CONCURRED' | 'CONCERNS_RAISED' | 'REJECTED',
+    notes: string,
+    user: User
+  ): CoordinationCase | undefined {
+    const c = this.getCoordinationCaseById(caseId);
+    if (!c) return undefined;
+
+    const deptRecord = c.participatingDepartments.find(
+      (d) => d.departmentName.toLowerCase() === departmentName.toLowerCase() || d.departmentId === departmentName
+    );
+
+    if (deptRecord) {
+      deptRecord.concurrenceStatus = status;
+      deptRecord.officerName = user.name;
+      deptRecord.officerDesignation = user.designation;
+      deptRecord.officerUserId = user.id;
+      deptRecord.concurrenceNotes = notes;
+      deptRecord.timestamp = new Date().toISOString();
+    } else {
+      c.participatingDepartments.push({
+        departmentId: `DEPT-${Date.now()}`,
+        departmentName: departmentName as DepartmentName,
+        isOwner: false,
+        concurrenceStatus: status,
+        officerName: user.name,
+        officerDesignation: user.designation,
+        officerUserId: user.id,
+        concurrenceNotes: notes,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    c.auditTimeline.unshift({
+      id: `AUD-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      actorId: user.id,
+      actorName: user.name,
+      actorRole: user.role,
+      actorDepartment: user.department,
+      stage: 'TECHNICAL_REVIEW',
+      action: 'DEPARTMENTAL_CONCURRENCE_LOGGED',
+      details: `${departmentName} concurrence status: ${status}. Note: ${notes}`,
+      badgeColor: status === 'CONCURRED' ? 'green' : status === 'REJECTED' ? 'red' : 'amber',
+    });
+
+    c.updatedAt = new Date().toISOString();
+    return c;
+  }
+
+  public proposeLeadership(caseId: string, user: User, notes?: string): CoordinationCase | undefined {
+    const c = this.getCoordinationCaseById(caseId);
+    if (!c) return undefined;
+
+    c.status = 'LEADERSHIP_REVIEW';
+    if (c.technicalDecision) {
+      c.technicalDecision.notes = notes || c.technicalDecision.notes;
+    }
+
+    c.auditTimeline.unshift({
+      id: `AUD-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      actorId: user.id,
+      actorName: user.name,
+      actorRole: user.role,
+      actorDepartment: user.department,
+      stage: 'TECHNICAL_PROPOSAL',
+      action: 'PROPOSED_TO_LEADERSHIP',
+      details: `Formal statutory decision dossier submitted to Municipal Commissioner / Higher Authority by ${user.name}.`,
+      badgeColor: 'purple',
+    });
+
+    for (const projId of [c.primaryProjectId, ...c.relatedProjectIds]) {
+      const proj = this.getProjectById(projId);
+      if (proj) {
+        proj.status = 'AWAITING_HIGHER_AUTHORITY';
+      }
+    }
+
+    this.addNotification({
+      id: `NOTIF-${Date.now()}`,
+      title: `Leadership Review Required: ${c.caseNumber}`,
+      message: `Multi-agency coordination package on ${c.roadName} submitted by ${user.name} (${user.department}) ready for statutory sanction.`,
+      type: 'APPROVAL',
+      link: '/approvals',
+      isRead: false,
+      timestamp: new Date().toISOString(),
+      targetRole: 'COMMISSIONER',
+    });
+
+    c.updatedAt = new Date().toISOString();
+    return c;
+  }
+
+  public recordLeadershipDecision(
+    caseId: string,
+    decision: 'APPROVED' | 'REJECTED' | 'RETURNED_FOR_REVISION',
+    remarks: string,
+    user: User,
+    signatureStamp?: string
+  ): CoordinationCase | undefined {
+    const c = this.getCoordinationCaseById(caseId);
+    if (!c) return undefined;
+
+    const newStatus = decision === 'APPROVED' ? 'APPROVED' : decision === 'REJECTED' ? 'REJECTED' : 'UNDER_TECHNICAL_REVIEW';
+    c.status = newStatus;
+
+    c.leadershipDecision = {
+      decision,
+      approverId: user.id,
+      approverName: user.name,
+      approverRole: user.role,
+      designation: user.designation,
+      timestamp: new Date().toISOString(),
+      remarks: remarks || 'Statutory approval granted.',
+      digitalSignatureStamp: signatureStamp || `DIG-SIG-${user.id}-${Date.now()}`,
+    };
+
+    c.auditTimeline.unshift({
+      id: `AUD-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      actorId: user.id,
+      actorName: user.name,
+      actorRole: user.role,
+      actorDepartment: user.department,
+      stage: 'LEADERSHIP_REVIEW',
+      action: `LEADERSHIP_${decision}`,
+      details: `Statutory leadership order recorded by ${user.name} (${user.designation}). Remarks: ${remarks}`,
+      badgeColor: decision === 'APPROVED' ? 'emerald' : decision === 'REJECTED' ? 'rose' : 'amber',
+    });
+
+    for (const projId of [c.primaryProjectId, ...c.relatedProjectIds]) {
+      const proj = this.getProjectById(projId);
+      if (proj) {
+        if (decision === 'APPROVED') {
+          proj.status = 'APPROVED';
+        } else if (decision === 'REJECTED') {
+          proj.status = 'REJECTED';
+        } else {
+          proj.status = 'MODIFICATION_REQUESTED';
+        }
+      }
+    }
+
+    if (decision === 'APPROVED') {
+      this.addNotification({
+        id: `NOTIF-${Date.now()}`,
+        title: `Coordination Case Approved: ${c.caseNumber}`,
+        message: `Sanction granted by ${user.name}. Contractor allocation and permit issuance now active.`,
+        type: 'PERMIT',
+        link: '/contractor',
+        isRead: false,
+        timestamp: new Date().toISOString(),
+        targetRole: 'EXECUTIVE_ENGINEER',
+      });
+    }
+
+    c.updatedAt = new Date().toISOString();
+    return c;
+  }
+
+  public allocateContractor(
+    caseOrProjId: string,
+    allocation: ContractorAllocationRecord,
+    user: User
+  ): { success: boolean; entity: any } {
+    const c = this.getCoordinationCaseById(caseOrProjId);
+    const proj = this.getProjectById(caseOrProjId);
+
+    if (c) {
+      if (!c.contractorAllocations) c.contractorAllocations = [];
+      c.contractorAllocations.push(allocation);
+      c.status = 'CONTRACTOR_ALLOCATED';
+
+      c.auditTimeline.unshift({
+        id: `AUD-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        actorId: user.id,
+        actorName: user.name,
+        actorRole: user.role,
+        actorDepartment: user.department,
+        stage: 'CONTRACTOR_ALLOCATION',
+        action: 'CONTRACTOR_ASSIGNED',
+        details: `Assigned EPC Contractor ${allocation.contractorName} (${allocation.contractorId}) for scope: ${allocation.workScope}`,
+        badgeColor: 'blue',
+      });
+
+      for (const pId of [c.primaryProjectId, ...c.relatedProjectIds]) {
+        const p = this.getProjectById(pId);
+        if (p) {
+          p.contractorId = allocation.contractorId;
+          p.contractorName = allocation.contractorName;
+          p.status = 'PERMIT_READY';
+        }
+      }
+
+      c.updatedAt = new Date().toISOString();
+      return { success: true, entity: c };
+    }
+
+    if (proj) {
+      proj.contractorId = allocation.contractorId;
+      proj.contractorName = allocation.contractorName;
+      proj.status = 'PERMIT_READY';
+      proj.contractorAllocation = allocation;
+      return { success: true, entity: proj };
+    }
+
+    return { success: false, entity: null };
+  }
+
+  public updateExecutionStage(
+    caseOrProjId: string,
+    stageId: string,
+    status: 'IN_PROGRESS' | 'COMPLETED_PENDING_QC',
+    notes: string,
+    photos: string[],
+    user: User
+  ): { success: boolean; stage: any } {
+    const c = this.getCoordinationCaseById(caseOrProjId);
+    const targetStages = c ? c.stages : this.getProjectById(caseOrProjId)?.executionStages;
+
+    if (!targetStages) {
+      return { success: false, stage: null };
+    }
+
+    const st = targetStages.find((s) => s.stageId === stageId);
+    if (!st) return { success: false, stage: null };
+
+    st.status = status;
+    st.workDoneNotes = notes || st.workDoneNotes;
+    if (photos && photos.length > 0) {
+      st.evidencePhotos = photos;
+    }
+
+    if (status === 'IN_PROGRESS' && !st.startedAt) {
+      st.startedAt = new Date().toISOString();
+      if (c) c.status = 'IN_EXECUTION';
+    }
+
+    if (status === 'COMPLETED_PENDING_QC') {
+      st.completedAt = new Date().toISOString();
+      st.completedBy = user.name;
+
+      if (c) {
+        c.auditTimeline.unshift({
+          id: `AUD-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          actorId: user.id,
+          actorName: user.name,
+          actorRole: user.role,
+          actorDepartment: user.department,
+          stage: 'STAGE_EXECUTION',
+          action: 'STAGE_COMPLETED_PENDING_QC',
+          details: `Stage ${st.sequence}: ${st.name} submitted by contractor. QC verification requested.`,
+          badgeColor: 'amber',
+        });
+      }
+
+      this.addNotification({
+        id: `NOTIF-${Date.now()}`,
+        title: `QC Required: Stage ${st.sequence} (${st.name})`,
+        message: `Field inspection required on ${c?.roadName || 'Corridor'} for Stage ${st.sequence}.`,
+        type: 'INSPECTION',
+        link: '/inspections',
+        isRead: false,
+        timestamp: new Date().toISOString(),
+        targetRole: 'INSPECTOR',
+      });
+    }
+
+    if (c) c.updatedAt = new Date().toISOString();
+    return { success: true, stage: st };
+  }
+
+  public assignStageQC(
+    caseOrProjId: string,
+    stageId: string,
+    inspectorId: string,
+    inspectorName: string,
+    user: User
+  ): { success: boolean; stage: any } {
+    const c = this.getCoordinationCaseById(caseOrProjId);
+    const targetStages = c ? c.stages : this.getProjectById(caseOrProjId)?.executionStages;
+    if (!targetStages) return { success: false, stage: null };
+
+    const st = targetStages.find((s) => s.stageId === stageId);
+    if (!st) return { success: false, stage: null };
+
+    st.status = 'QC_IN_PROGRESS';
+    st.qcInspectorId = inspectorId;
+    st.qcInspectorName = inspectorName;
+    st.qcAssignedAt = new Date().toISOString();
+
+    if (c) {
+      c.auditTimeline.unshift({
+        id: `AUD-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        actorId: user.id,
+        actorName: user.name,
+        actorRole: user.role,
+        actorDepartment: user.department,
+        stage: 'QC_INSPECTION',
+        action: 'QC_INSPECTOR_ASSIGNED',
+        details: `Assigned Quality Inspector ${inspectorName} (${inspectorId}) for Stage ${st.sequence} verification.`,
+        badgeColor: 'blue',
+      });
+      c.updatedAt = new Date().toISOString();
+    }
+
+    return { success: true, stage: st };
+  }
+
+  public recordStageQCDecision(
+    caseOrProjId: string,
+    stageId: string,
+    result: 'PASS' | 'FAIL',
+    remarks: string,
+    checklist: any[],
+    user: User
+  ): { success: boolean; stage: any; nextStageUnlocked: boolean; allCompleted: boolean } {
+    const c = this.getCoordinationCaseById(caseOrProjId);
+    const targetStages = c ? c.stages : this.getProjectById(caseOrProjId)?.executionStages;
+    if (!targetStages) return { success: false, stage: null, nextStageUnlocked: false, allCompleted: false };
+
+    const stIndex = targetStages.findIndex((s) => s.stageId === stageId);
+    if (stIndex === -1) return { success: false, stage: null, nextStageUnlocked: false, allCompleted: false };
+
+    const st = targetStages[stIndex];
+    st.qcResult = result;
+    st.qcRemarks = remarks;
+    st.qcCompletedAt = new Date().toISOString();
+    st.qcInspectorName = user.name;
+    st.qcChecklist = checklist || [];
+
+    let nextStageUnlocked = false;
+    let allCompleted = false;
+
+    if (result === 'PASS') {
+      st.status = 'QC_PASSED';
+
+      if (stIndex + 1 < targetStages.length) {
+        targetStages[stIndex + 1].status = 'NOT_STARTED';
+        nextStageUnlocked = true;
+      } else {
+        allCompleted = true;
+        if (c) c.status = 'ALL_STAGES_COMPLETED';
+      }
+
+      if (c) {
+        c.auditTimeline.unshift({
+          id: `AUD-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          actorId: user.id,
+          actorName: user.name,
+          actorRole: user.role,
+          actorDepartment: user.department,
+          stage: 'QC_INSPECTION',
+          action: 'STAGE_QC_PASSED',
+          details: `Stage ${st.sequence} (${st.name}) PASSED QC by ${user.name}. ${nextStageUnlocked ? 'Next stage unlocked.' : 'All execution stages completed!'}`,
+          badgeColor: 'emerald',
+        });
+      }
+    } else {
+      st.status = 'REWORK_REQUIRED';
+
+      if (c) {
+        c.auditTimeline.unshift({
+          id: `AUD-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          actorId: user.id,
+          actorName: user.name,
+          actorRole: user.role,
+          actorDepartment: user.department,
+          stage: 'QC_INSPECTION',
+          action: 'STAGE_QC_FAILED_REWORK_REQUIRED',
+          details: `Stage ${st.sequence} FAILED QC: ${remarks}. Contractor correction required.`,
+          badgeColor: 'rose',
+        });
+      }
+
+      this.addNotification({
+        id: `NOTIF-${Date.now()}`,
+        title: `REWORK REQUIRED: Stage ${st.sequence}`,
+        message: `QC Failure on ${c?.roadName || 'Corridor'}. Defects: ${remarks}`,
+        type: 'INSPECTION',
+        link: '/contractor',
+        isRead: false,
+        timestamp: new Date().toISOString(),
+        targetRole: 'CONTRACTOR',
+      });
+    }
+
+    if (c) c.updatedAt = new Date().toISOString();
+    return { success: true, stage: st, nextStageUnlocked, allCompleted };
+  }
+
+  public finalizeProjectAndRoadHistory(caseOrProjId: string, user: User): { success: boolean; historyItem: any } {
+    const c = this.getCoordinationCaseById(caseOrProjId);
+    const proj = this.getProjectById(caseOrProjId);
+
+    const roadId = c?.roadId || proj?.roadId || 'RD-NSK-02';
+    const roadName = c?.roadName || proj?.roadName || 'Corridor';
+
+    const historyItem: RoadWorkHistoryItem = {
+      id: `HIST-${Date.now()}`,
+      roadId,
+      roadName,
+      date: new Date().toISOString(),
+      projectId: c?.primaryProjectId || proj?.id || 'PROJ-01',
+      projectName: c?.corridorName || proj?.name || 'Infrastructure Work',
+      department: (c ? 'Smart City & Urban Planning' : proj?.department) as DepartmentName,
+      infrastructureType: c ? 'Multi-Utility Joint Trench' : (proj?.projectType || 'Utility Trench'),
+      excavationDurationDays: c ? c.executionWindow.durationDays : (proj?.expectedExcavationDurationDays || 30),
+      completionDate: new Date().toISOString(),
+      restorationDate: new Date().toISOString(),
+      inspectionResult: 'FINAL_QC_PASSED_100%_COMPLIANT',
+      contractor: c?.contractorAllocations?.[0]?.contractorName || proj?.contractorName || 'M/s InfraTech',
+      documentsCount: 4,
+    };
+
+    if (!this.state.history) this.state.history = [];
+    this.state.history.unshift(historyItem);
+
+    if (c) {
+      c.status = 'CLOSED';
+      c.verifiedCostSavedINR = c.projectedCostSavedINR;
+      c.verifiedExcavationsAvoided = c.projectedExcavationsAvoided;
+      c.auditTimeline.unshift({
+        id: `AUD-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        actorId: user.id,
+        actorName: user.name,
+        actorRole: user.role,
+        actorDepartment: user.department,
+        stage: 'PROJECT_CLOSURE',
+        action: 'PROJECT_CLOSED_AND_ROAD_HISTORY_COMMITTED',
+        details: `All stages verified. Final restoration QC passed. Digital Road Twin history updated with ₹${(c.verifiedCostSavedINR / 100000).toFixed(1)} Lakhs verified savings.`,
+        badgeColor: 'emerald',
+      });
+      c.updatedAt = new Date().toISOString();
+    }
+
+    if (proj) {
+      proj.status = 'COMPLETED';
+    }
+
+    return { success: true, historyItem };
+  }
+
 }
 
 export const db = new DatabaseManager();

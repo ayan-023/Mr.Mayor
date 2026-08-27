@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { Project, WorkProgressLog } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { WorkflowLifecycleBanner } from '../common/WorkflowLifecycleBanner';
 import { api } from '../../services/api';
 
 interface ContractorPortalProps {
@@ -187,6 +188,19 @@ export const ContractorPortal: React.FC<ContractorPortalProps> = ({ projects, on
 
   return (
     <div className="space-y-6 pb-12">
+      {/* Universal Workflow Lifecycle Banner */}
+      {selectedProject && (
+        <WorkflowLifecycleBanner
+          status={selectedProject.status}
+          strategy={selectedProject.executionStrategy || 'COORDINATED'}
+          caseNumber={selectedProject.code}
+          roadName={selectedProject.roadName}
+          currentActorRole={isContractor ? 'Assigned EPC Contractor' : 'Contractor Project Engineer'}
+          currentActorDepartment={selectedProject.department}
+          onRefresh={onRefreshData}
+        />
+      )}
+
       {/* Header */}
       <div className="bg-white border border-slate-200 rounded-2xl p-6 md:p-8 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>

@@ -29,6 +29,7 @@ import {
   DepartmentName,
 } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { WorkflowLifecycleBanner } from '../common/WorkflowLifecycleBanner';
 
 interface TechnicalReviewWorkspaceProps {
   project: Project;
@@ -63,6 +64,10 @@ export const TechnicalReviewWorkspace: React.FC<TechnicalReviewWorkspaceProps> =
 
   const isHigherAuthority = ['COMMISSIONER', 'ADMIN'].includes(currentUser.role);
   const isTechnicalAuthority = ['EXECUTIVE_ENGINEER', 'NODAL_OFFICER', 'DEPT_HEAD', 'ADMIN'].includes(currentUser.role);
+
+  const isProjectOwner = currentUser?.department === project.department || ['COMMISSIONER', 'ADMIN'].includes(currentUser?.role);
+  const isAffectedConcurrence = !isProjectOwner && ['EXECUTIVE_ENGINEER', 'DEPT_HEAD'].includes(currentUser?.role);
+
 
   const planA = project.planVersions?.[0]?.candidatePlans?.find((p) => p.planId === 'PLAN_A') || {
     planId: 'PLAN_A',

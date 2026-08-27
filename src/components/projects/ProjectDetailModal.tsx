@@ -35,6 +35,7 @@ import {
   Inspection,
 } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { WorkflowLifecycleBanner } from '../common/WorkflowLifecycleBanner';
 import { api } from '../../services/api';
 import { AICoordinationView } from '../coordination/AICoordinationView';
 import { InfrastructureAnalysisCenter } from '../coordination/InfrastructureAnalysisCenter';

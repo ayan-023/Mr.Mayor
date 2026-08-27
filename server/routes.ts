@@ -2418,3 +2418,201 @@ apiRouter.post('/coordination/reject-plan', (req: Request, res: Response) => {
   res.json({ success: true, message: 'Coordination plan rejection logged in audit ledger.' });
 });
 
+
+
+// ============================================================
+// COORDINATION CASES & COMPLETE MUNICIPAL LIFECYCLE API ROUTES
+// ============================================================
+
+// 1. Get all coordination cases
+apiRouter.get('/coordination-cases', (req: Request, res: Response) => {
+  const cases = db.getCoordinationCases();
+  res.json({ success: true, count: cases.length, cases });
+});
+
+// 2. Get specific coordination case
+apiRouter.get('/coordination-cases/:id', (req: Request, res: Response) => {
+  const c = db.getCoordinationCaseById(req.params.id);
+  if (!c) return res.status(404).json({ error: 'Coordination case not found' });
+  
+  // Hydrate related projects
+  const relatedProjects = (c.relatedProjectIds || []).map((id) => db.getProjectById(id)).filter(Boolean);
+  res.json({ success: true, case: { ...c, relatedProjects } });
+});
+
+// 3. Create or register a coordination case
+apiRouter.post('/coordination-cases', (req: Request, res: Response) => {
+  try {
+    const created = db.createCoordinationCase(req.body);
+    res.status(201).json({ success: true, case: created });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to create coordination case' });
+  }
+});
+
+// 4. Get all verified contractors
+apiRouter.get('/contractors', (req: Request, res: Response) => {
+  const contractors = db.getContractors();
+  res.json({ success: true, count: contractors.length, contractors });
+});
+
+// 5. Record Technical Strategy Decision (Owning Engineer / Technical Review)
+apiRouter.post('/coordination-cases/:id/strategy', (req: Request, res: Response) => {
+  const { strategy, planId, userId, reason } = req.body;
+  const users = db.getUsers();
+  const user = users.find((u) => u.id === userId) || users[0];
+
+  const updated = db.recordStrategyDecision(
+    req.params.id,
+    strategy,
+    planId || 'PLAN_A',
+    user,
+    reason
+  );
+
+  if (!updated) return res.status(404).json({ error: 'Coordination case not found' });
+  res.json({ success: true, message: 'Technical strategy decision recorded.', case: updated });
+});
+
+// 6. Record Departmental Concurrence (Affected Utility Clearance)
+apiRouter.post('/coordination-cases/:id/concurrence', (req: Request, res: Response) => {
+  const { departmentName, status, notes, userId } = req.body;
+  const users = db.getUsers();
+  const user = users.find((u) => u.id === userId) || users[0];
+
+  const updated = db.recordDepartmentConcurrence(
+    req.params.id,
+    departmentName || user.department,
+    status || 'CONCURRED',
+    notes || 'Technical clearance granted for underground utility alignment.',
+    user
+  );
+
+  if (!updated) return res.status(404).json({ error: 'Coordination case not found' });
+  res.json({ success: true, message: 'Departmental concurrence logged.', case: updated });
+});
+
+// 7. Propose to Leadership
+apiRouter.post('/coordination-cases/:id/propose-leadership', (req: Request, res: Response) => {
+  const { userId, notes } = req.body;
+  const users = db.getUsers();
+  const user = users.find((u) => u.id === userId) || users[0];
+
+  const updated = db.proposeLeadership(req.params.id, user, notes);
+  if (!updated) return res.status(404).json({ error: 'Coordination case not found' });
+  res.json({ success: true, message: 'Package submitted to Higher Authority / Leadership Review.', case: updated });
+});
+
+// 8. Leadership Approval / Rejection / Revision
+apiRouter.post('/coordination-cases/:id/leadership-decision', (req: Request, res: Response) => {
+  const { decision, remarks, userId, signatureStamp } = req.body;
+  const users = db.getUsers();
+  const user = users.find((u) => u.id === userId) || users[0];
+
+  const updated = db.recordLeadershipDecision(
+    req.params.id,
+    decision || 'APPROVED',
+    remarks || 'Statutory sanction approved.',
+    user,
+    signatureStamp
+  );
+
+  if (!updated) return res.status(404).json({ error: 'Coordination case not found' });
+  res.json({ success: true, message: `Leadership decision recorded: ${decision}`, case: updated });
+});
+
+// 9. Allocate Contractor
+apiRouter.post('/coordination-cases/:id/allocate-contractor', (req: Request, res: Response) => {
+  const { contractorId, contractorName, specialization, workScope, userId } = req.body;
+  const users = db.getUsers();
+  const user = users.find((u) => u.id === userId) || users[0];
+
+  const allocation = {
+    contractorId: contractorId || 'CTR-NSK-01',
+    contractorName: contractorName || 'M/s InfraTech Construction Ltd.',
+    specialization: specialization || 'Multi-Utility Micro-Trenching',
+    assignedAt: new Date().toISOString(),
+    assignedBy: user.name,
+    workScope: workScope || 'Complete corridor trenching, utility laying, and bituminous road restoration.',
+    status: 'ASSIGNED' as const,
+  };
+
+  const result = db.allocateContractor(req.params.id, allocation, user);
+  if (!result.success) return res.status(404).json({ error: 'Case or project not found' });
+  res.json({ success: true, message: 'Contractor assigned and mobilized.', entity: result.entity });
+});
+
+// 10. Update Execution Stage (Contractor progress or complete pending QC)
+apiRouter.post('/coordination-cases/:id/stages/:stageId/update', (req: Request, res: Response) => {
+  const { status, notes, photos, userId } = req.body;
+  const users = db.getUsers();
+  const user = users.find((u) => u.id === userId) || users[0];
+
+  const result = db.updateExecutionStage(
+    req.params.id,
+    req.params.stageId,
+    status || 'COMPLETED_PENDING_QC',
+    notes || '',
+    photos || [],
+    user
+  );
+
+  if (!result.success) return res.status(404).json({ error: 'Stage or case not found' });
+  res.json({ success: true, message: 'Stage progress updated.', stage: result.stage });
+});
+
+// 11. Assign Stage QC Inspector
+apiRouter.post('/coordination-cases/:id/stages/:stageId/assign-qc', (req: Request, res: Response) => {
+  const { inspectorId, inspectorName, userId } = req.body;
+  const users = db.getUsers();
+  const user = users.find((u) => u.id === userId) || users[0];
+
+  const result = db.assignStageQC(
+    req.params.id,
+    req.params.stageId,
+    inspectorId || 'usr-nsk-05',
+    inspectorName || 'Er. Mahesh Patil (Senior QC Inspector)',
+    user
+  );
+
+  if (!result.success) return res.status(404).json({ error: 'Stage or case not found' });
+  res.json({ success: true, message: 'QC Inspector assigned to stage.', stage: result.stage });
+});
+
+// 12. Record Stage QC Decision (Pass or Fail / Rework)
+apiRouter.post('/coordination-cases/:id/stages/:stageId/qc-decision', (req: Request, res: Response) => {
+  const { result, remarks, checklist, userId } = req.body;
+  const users = db.getUsers();
+  const user = users.find((u) => u.id === userId) || users[0];
+
+  const qcResult = db.recordStageQCDecision(
+    req.params.id,
+    req.params.stageId,
+    result || 'PASS',
+    remarks || 'Inspection passed in accordance with civil engineering specifications.',
+    checklist || [],
+    user
+  );
+
+  if (!qcResult.success) return res.status(404).json({ error: 'Stage or case not found' });
+  res.json({
+    success: true,
+    message: result === 'PASS' ? 'Stage QC PASSED. Next stage unlocked.' : 'Stage QC FAILED. Rework required.',
+    ...qcResult,
+  });
+});
+
+// 13. Final Closure & Road History Commit
+apiRouter.post('/coordination-cases/:id/finalize-closure', (req: Request, res: Response) => {
+  const { userId } = req.body;
+  const users = db.getUsers();
+  const user = users.find((u) => u.id === userId) || users[0];
+
+  const result = db.finalizeProjectAndRoadHistory(req.params.id, user);
+  if (!result.success) return res.status(404).json({ error: 'Case or project not found' });
+  res.json({
+    success: true,
+    message: 'Project closed and Digital Road Twin history updated with verified outcome data.',
+    historyItem: result.historyItem,
+  });
+});

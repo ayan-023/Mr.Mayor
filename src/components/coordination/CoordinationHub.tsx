@@ -1,10 +1,10 @@
 /**
- * MR. MAYOR - Multi-Agency Joint Trench Coordination Hub
- * Provides interactive coordination cluster management, cross-section trench depth visualizer,
- * joint scheduling timeline, shared cost allocation, and multi-agency consensus sign-off.
+ * MR. MAYOR - Multi-Agency Joint Digging & Coordination Case Hub
+ * Centralizes all coordination cases, AI multi-candidate planning, department concurrence,
+ * leadership approval packages, contractor allocation, stage-based execution, and QC gating.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   GitMerge,
   Sparkles,
@@ -18,486 +18,1134 @@ import {
   TrendingDown,
   Building,
   Check,
+  AlertTriangle,
+  FileCheck2,
+  HardHat,
+  UserCheck,
+  RotateCcw,
+  ExternalLink,
+  ChevronRight,
+  Lock,
+  Plus,
+  XCircle,
+  Eye,
+  FileText,
 } from 'lucide-react';
-import { CoordinationCluster, Project } from '../../types';
+import { CoordinationCase, Project, ExecutionStrategy } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../services/api';
+import { WorkflowLifecycleBanner } from '../common/WorkflowLifecycleBanner';
+import { ErrorBoundary } from '../common/ErrorBoundary';
 
 interface CoordinationHubProps {
-  clusters: CoordinationCluster[];
+  clusters?: any[];
   onRefreshData: () => void;
   onSelectProject?: (project: Project) => void;
 }
 
 export const CoordinationHub: React.FC<CoordinationHubProps> = ({
-  clusters,
   onRefreshData,
   onSelectProject,
 }) => {
   const { currentUser } = useAuth();
-  const [selectedClusterId, setSelectedClusterId] = useState<string>(
-    clusters[0]?.id || ''
-  );
-  const [isAnalyzingAI, setIsAnalyzingAI] = useState(false);
-  const [aiResult, setAiResult] = useState<any>(null);
-  const [isApproving, setIsApproving] = useState(false);
-  const [approvalNotes, setApprovalNotes] = useState('');
+  const [cases, setCases] = useState<CoordinationCase[]>([]);
+  const [selectedCaseId, setSelectedCaseId] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'AI_PLANS' | 'TECH_REVIEW' | 'LEADERSHIP' | 'CONTRACTOR' | 'EXECUTION_QC' | 'AUDIT'>('OVERVIEW');
 
-  const activeCluster = clusters.find((c) => c.id === selectedClusterId) || clusters[0];
+  // Interactive Form States
+  const [strategyReason, setStrategyReason] = useState<string>('');
+  const [concurrenceNotes, setConcurrenceNotes] = useState<string>('');
+  const [leadershipRemarks, setLeadershipRemarks] = useState<string>('');
+  const [selectedContractorId, setSelectedContractorId] = useState<string>('CTR-NSK-01');
+  const [stageNotes, setStageNotes] = useState<string>('');
+  const [qcRemarks, setQcRemarks] = useState<string>('');
+  const [contractorsList, setContractorsList] = useState<any[]>([]);
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  const handleAIReanalyze = async () => {
-    if (!activeCluster) return;
-    setIsAnalyzingAI(true);
+  // Load coordination cases from API
+  const fetchCases = async () => {
+    setIsLoading(true);
     try {
-      const res = await api.analyzeAICoordination(
-        activeCluster.roadId,
-        activeCluster.projects.map((p) => p.id)
-      );
-      setAiResult(res);
-    } catch (err) {
-      console.error('AI Re-analysis failed:', err);
+      const [casesRes, contractorsRes] = await Promise.all([
+        api.getCoordinationCases(true),
+        api.getContractors(),
+      ]);
+      const loadedCases = casesRes.cases || [];
+      setCases(loadedCases);
+      setContractorsList(contractorsRes.contractors || []);
+      if (loadedCases.length > 0 && !selectedCaseId) {
+        setSelectedCaseId(loadedCases[0].id);
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch coordination cases:', err);
     } finally {
-      setIsAnalyzingAI(false);
+      setIsLoading(false);
     }
   };
 
-  const handleApproveCluster = async () => {
-    if (!activeCluster || !currentUser) return;
-    setIsApproving(true);
+  useEffect(() => {
+    fetchCases();
+  }, []);
+
+  const activeCase = cases.find((c) => c.id === selectedCaseId || c.caseNumber === selectedCaseId) || cases[0];
+
+  // RBAC checks
+  const isCommissionerOrLeadership =
+    currentUser?.role === 'COMMISSIONER' ||
+    currentUser?.role === 'ADMIN' ||
+    currentUser?.role === 'NODAL_OFFICER';
+
+  const isExecutiveEngineer =
+    currentUser?.role === 'EXECUTIVE_ENGINEER' ||
+    currentUser?.role === 'DEPT_HEAD';
+
+  const isInspector = currentUser?.role === 'INSPECTOR';
+  const isContractor = currentUser?.role === 'CONTRACTOR';
+
+  // Check if current user's department is the owner of this case
+  const isCaseOwner = activeCase?.participatingDepartments?.some(
+    (d) => d.isOwner && (d.departmentName === currentUser?.department || currentUser?.role === 'COMMISSIONER' || currentUser?.role === 'ADMIN')
+  );
+
+  // Handlers for Workflow State Transitions
+  const handleSelectStrategy = async (strategy: ExecutionStrategy, planId: 'PLAN_A' | 'PLAN_B' | 'PLAN_C') => {
+    if (!activeCase || !currentUser) return;
+    setIsProcessing(true);
+    setFeedback(null);
     try {
-      await api.approveCluster(activeCluster.id, {
-        department: currentUser.department,
-        officer: currentUser.name,
-        designation: currentUser.designation,
-        notes: approvalNotes || 'Consensus granted for joint trenching alignment and shared restoration costs.',
+      await api.recordCaseStrategy(activeCase.id, {
+        strategy,
+        planId,
+        userId: currentUser.id,
+        reason: strategyReason || `Execution strategy ${strategy} selected by ${currentUser.name}`,
       });
+      setFeedback({ type: 'success', message: `Strategy ${strategy} confirmed. Case updated to Technical Review.` });
+      await fetchCases();
       onRefreshData();
     } catch (err: any) {
-      alert(err.message || 'Failed to record approval');
+      setFeedback({ type: 'error', message: err.message || 'Failed to record strategy' });
     } finally {
-      setIsApproving(false);
+      setIsProcessing(false);
     }
   };
 
-  // Derive cluster stats
-  const projects = activeCluster?.projects || [];
-  const costAllocations = (activeCluster as any)?.costAllocation ||
-    (projects.length > 0
-      ? projects.map((proj, idx, arr) => {
-          const totalRestoration = projects.reduce((sum, p) => sum + (p?.estimatedRestorationCostINR || 2000000), 0);
-          const sharePct = Math.round(100 / (arr.length || 1));
-          const singleSharedCost = Math.round(totalRestoration * 0.45);
-          const allocatedCost = Math.round((singleSharedCost * sharePct) / 100);
-          const savings = Math.max(0, (proj?.estimatedRestorationCostINR || 2000000) - allocatedCost);
-          return {
-            department: proj?.department || `Agency ${idx + 1}`,
-            sharePercentage: sharePct,
-            allocatedCostINR: allocatedCost,
-            savingsINR: savings,
-          };
-        })
-      : [
-          { department: 'Water & Sewerage', sharePercentage: 35, allocatedCostINR: 900000, savingsINR: 1100000 },
-          { department: 'City Gas Distribution', sharePercentage: 35, allocatedCostINR: 900000, savingsINR: 1100000 },
-          { department: 'Electricity (DISCOM)', sharePercentage: 30, allocatedCostINR: 800000, savingsINR: 950000 },
-        ]);
+  const handleGrantConcurrence = async (status: 'CONCURRED' | 'CONCERNS_RAISED' | 'REJECTED') => {
+    if (!activeCase || !currentUser) return;
+    setIsProcessing(true);
+    setFeedback(null);
+    try {
+      await api.recordDepartmentConcurrence(activeCase.id, {
+        departmentName: currentUser.department,
+        status,
+        notes: concurrenceNotes || `Subsurface technical concurrence recorded as ${status} by ${currentUser.name}`,
+        userId: currentUser.id,
+      });
+      setFeedback({ type: 'success', message: `Departmental concurrence recorded as ${status}.` });
+      await fetchCases();
+      onRefreshData();
+    } catch (err: any) {
+      setFeedback({ type: 'error', message: err.message || 'Failed to record concurrence' });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
-  const approvalsList = Array.isArray(activeCluster?.departmentApprovals)
-    ? activeCluster.departmentApprovals
-    : Object.entries(activeCluster?.departmentApprovals || {}).map(([dept, data]: [string, any]) => ({
-        department: dept,
-        status: data?.approved ? 'APPROVED' : 'PENDING',
-        approvedBy: data?.officer,
-        approvedByDesignation: data?.designation,
-        timestamp: data?.timestamp,
-        notes: data?.notes,
-      }));
+  const handleProposeToLeadership = async () => {
+    if (!activeCase || !currentUser) return;
+    setIsProcessing(true);
+    setFeedback(null);
+    try {
+      await api.proposeCaseToLeadership(activeCase.id, {
+        userId: currentUser.id,
+        notes: 'Technical review concluded. Submitted for statutory leadership sanction.',
+      });
+      setFeedback({ type: 'success', message: 'Coordination Case proposed to Leadership for sanction.' });
+      await fetchCases();
+      onRefreshData();
+    } catch (err: any) {
+      setFeedback({ type: 'error', message: err.message || 'Failed to submit proposal' });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
-  const signedCount = approvalsList.filter((a: any) => a.status === 'APPROVED' || a.approved).length;
-  const totalCount = approvalsList.length || (activeCluster?.projects?.length || 1);
+  const handleLeadershipDecision = async (decision: 'APPROVED' | 'REJECTED' | 'RETURNED_FOR_REVISION') => {
+    if (!activeCase || !currentUser) return;
+    setIsProcessing(true);
+    setFeedback(null);
+    try {
+      await api.recordLeadershipDecision(activeCase.id, {
+        decision,
+        remarks: leadershipRemarks || `Statutory ${decision} order issued by ${currentUser.name} (${currentUser.designation})`,
+        userId: currentUser.id,
+      });
+      setFeedback({ type: 'success', message: `Leadership decision recorded: ${decision}` });
+      await fetchCases();
+      onRefreshData();
+    } catch (err: any) {
+      setFeedback({ type: 'error', message: err.message || 'Failed to record leadership decision' });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
-  const isApexOfficer =
-    currentUser?.role === 'COMMISSIONER' ||
-    currentUser?.role === 'NODAL_OFFICER' ||
-    currentUser?.role === 'ADMIN';
+  const handleAllocateContractor = async () => {
+    if (!activeCase || !currentUser) return;
+    const selectedContractor = contractorsList.find((c) => c.contractorId === selectedContractorId) || contractorsList[0];
+    setIsProcessing(true);
+    setFeedback(null);
+    try {
+      await api.allocateContractor(activeCase.id, {
+        contractorId: selectedContractor?.contractorId || 'CTR-NSK-01',
+        contractorName: selectedContractor?.contractorName || 'M/s InfraTech Construction Ltd.',
+        specialization: selectedContractor?.specialization || 'Multi-Utility Micro-Trenching',
+        workScope: `Single-window excavation and shared pipe/cable laying along ${activeCase.roadName}`,
+        userId: currentUser.id,
+      });
+      setFeedback({ type: 'success', message: 'Contractor assigned and mobilized. Permit is now active.' });
+      await fetchCases();
+      onRefreshData();
+    } catch (err: any) {
+      setFeedback({ type: 'error', message: err.message || 'Failed to assign contractor' });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
-  const involvedDepts: string[] = Array.from(
-    new Set([
-      ...(activeCluster?.projects?.map((p) => p.department).filter(Boolean) || []),
-      ...Object.keys(activeCluster?.departmentApprovals || {}),
-    ])
-  );
+  const handleContractorCompleteStage = async (stageId: string) => {
+    if (!activeCase || !currentUser) return;
+    setIsProcessing(true);
+    setFeedback(null);
+    try {
+      await api.updateExecutionStage(activeCase.id, stageId, {
+        status: 'COMPLETED_PENDING_QC',
+        notes: stageNotes || 'Stage work completed as per engineering drawings. Ready for QC inspection.',
+        photos: ['https://images.unsplash.com/photo-1541888946425-d0fbb180c5f2?w=800'],
+        userId: currentUser.id,
+      });
+      setFeedback({ type: 'success', message: 'Stage marked complete. QC inspection requested!' });
+      await fetchCases();
+      onRefreshData();
+    } catch (err: any) {
+      setFeedback({ type: 'error', message: err.message || 'Failed to update stage' });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
-  const isInvolvedDepartment =
-    isApexOfficer ||
-    involvedDepts.some(
-      (dept) =>
-        dept === currentUser?.department ||
-        (typeof dept === 'string' &&
-          typeof currentUser?.department === 'string' &&
-          dept.includes(currentUser.department))
+  const handleAssignQCInspector = async (stageId: string) => {
+    if (!activeCase || !currentUser) return;
+    setIsProcessing(true);
+    setFeedback(null);
+    try {
+      await api.assignStageQC(activeCase.id, stageId, {
+        inspectorId: 'usr-nsk-05',
+        inspectorName: 'Er. Mahesh Patil (Senior Quality & Safety Inspector)',
+        userId: currentUser.id,
+      });
+      setFeedback({ type: 'success', message: 'QC Inspector Er. Mahesh Patil assigned to stage inspection.' });
+      await fetchCases();
+      onRefreshData();
+    } catch (err: any) {
+      setFeedback({ type: 'error', message: err.message || 'Failed to assign inspector' });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleRecordQCDecision = async (stageId: string, result: 'PASS' | 'FAIL') => {
+    if (!activeCase || !currentUser) return;
+    setIsProcessing(true);
+    setFeedback(null);
+    try {
+      await api.recordStageQCDecision(activeCase.id, stageId, {
+        result,
+        remarks: qcRemarks || (result === 'PASS' ? 'Compaction density > 95% and barricades fully verified. Passed.' : 'Compaction density below 90%. Rework ordered on sub-base layer.'),
+        checklist: [
+          { item: 'Approved Depth & Alignment Alignment Verified', passed: result === 'PASS' },
+          { item: 'Utility Clearance & Pipe Bedding Integrity', passed: result === 'PASS' },
+          { item: 'Compaction Density Test (MoRTH Spec)', passed: result === 'PASS' },
+          { item: 'IRC:SP:55 Safety Barricading & Flasher Lights', passed: true },
+        ],
+        userId: currentUser.id,
+      });
+      setFeedback({
+        type: 'success',
+        message: result === 'PASS' ? 'Stage QC PASSED. Next stage unlocked!' : 'Stage QC FAILED. Rework notice issued to contractor.',
+      });
+      await fetchCases();
+      onRefreshData();
+    } catch (err: any) {
+      setFeedback({ type: 'error', message: err.message || 'Failed to record QC result' });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleFinalizeClosure = async () => {
+    if (!activeCase || !currentUser) return;
+    setIsProcessing(true);
+    setFeedback(null);
+    try {
+      await api.finalizeCaseClosure(activeCase.id, {
+        userId: currentUser.id,
+      });
+      setFeedback({ type: 'success', message: 'Project closed and verified outcomes committed to Digital Road Twin history!' });
+      await fetchCases();
+      onRefreshData();
+    } catch (err: any) {
+      setFeedback({ type: 'error', message: err.message || 'Failed to close case' });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="p-12 text-center space-y-4">
+        <div className="w-10 h-10 border-4 border-blue-900 border-t-transparent rounded-full animate-spin mx-auto" />
+        <p className="text-xs text-slate-600 font-bold tracking-wide">
+          Loading Municipal Coordination Cases & Live Lifecycles...
+        </p>
+      </div>
     );
+  }
 
-  const myDeptApproval = approvalsList.find(
-    (a: any) =>
-      a.department === currentUser?.department ||
-      a.approvedBy === currentUser?.name
-  );
-
-  const hasAlreadyApproved = myDeptApproval && myDeptApproval.status === 'APPROVED';
+  if (cases.length === 0) {
+    return (
+      <div className="p-10 rounded-2xl bg-white border border-slate-200 text-center space-y-3">
+        <GitMerge className="w-10 h-10 text-slate-400 mx-auto" />
+        <h3 className="text-base font-bold text-slate-800">No Coordination Cases Found</h3>
+        <p className="text-xs text-slate-500 max-w-md mx-auto">
+          Coordination opportunities are automatically clustered when related projects are submitted along the same corridor.
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* Top Header Banner */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 md:p-8 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-        <div>
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 uppercase tracking-wider flex items-center gap-1.5">
-              <GitMerge className="w-3.5 h-3.5 text-blue-600" /> Joint Trench Coordination
-            </span>
-            <span className="text-xs text-slate-500">Trench Synchronization & Shared Resurfacing</span>
+    <ErrorBoundary>
+      <div className="space-y-6 pb-16">
+        {/* Top Header Bar */}
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-5 md:p-6 shadow-xs flex flex-wrap items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-900 border border-blue-200 uppercase font-mono">
+                SINGLE-WINDOW MUNICIPAL HUB
+              </span>
+              <span className="text-xs text-slate-500 font-medium">
+                {cases.length} Registered Cases
+              </span>
+            </div>
+            <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
+              <GitMerge className="w-6 h-6 text-blue-900" />
+              <span>Joint Digging & Coordination Cases</span>
+            </h1>
           </div>
-          <h1 className="text-xl md:text-3xl font-bold text-slate-900 tracking-tight">
-            Inter-Departmental Joint Digging Hub
-          </h1>
-          <p className="text-xs md:text-sm text-slate-600 max-w-2xl mt-1">
-            Eliminate repetitive road cutting by synchronizing Water, Drainage, Telecom, Gas, and Power works into a single shared trenching window.
-          </p>
+
+          {/* Quick Case Switcher */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-600">Active Case:</span>
+            <select
+              value={selectedCaseId}
+              onChange={(e) => setSelectedCaseId(e.target.value)}
+              className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-xs font-bold text-slate-800 cursor-pointer shadow-2xs focus:ring-2 focus:ring-blue-900"
+            >
+              {cases.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.caseNumber} • {c.corridorName.slice(0, 35)}...
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={fetchCases}
+              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
+              title="Refresh Cases"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
-          <button
-            onClick={handleAIReanalyze}
-            disabled={isAnalyzingAI || !activeCluster}
-            className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+        {/* Global Feedback Banner */}
+        {feedback && (
+          <div
+            className={`p-4 rounded-xl border flex items-center justify-between gap-3 text-xs font-bold animate-in fade-in ${
+              feedback.type === 'success'
+                ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
+                : 'bg-rose-50 text-rose-900 border-rose-300'
+            }`}
           >
-            <Sparkles className="w-4 h-4 text-white" />
-            {isAnalyzingAI ? 'Optimizing Schedule...' : 'Re-Optimize Joint Schedule'}
-          </button>
-        </div>
-      </div>
-
-      {/* Main Cluster Selector & Details */}
-      {clusters.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center space-y-4 shadow-xs">
-          <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto border border-blue-200">
-            <GitMerge className="w-6 h-6" />
+            <div className="flex items-center gap-2">
+              {feedback.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+              ) : (
+                <AlertTriangle className="w-4 h-4 text-rose-700 shrink-0" />
+              )}
+              <span>{feedback.message}</span>
+            </div>
+            <button onClick={() => setFeedback(null)} className="text-slate-400 hover:text-slate-600">
+              <XCircle className="w-4 h-4" />
+            </button>
           </div>
-          <div className="max-w-md mx-auto space-y-1.5">
-            <h3 className="font-bold text-xl text-slate-900">
-              No Active Coordination Clusters
-            </h3>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              When multiple municipal utilities submit excavation proposals with overlapping dates or road alignments, the Mr. Mayor Conflict Engine automatically synthesizes them into joint coordination clusters here.
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column: Cluster List */}
-          <div className="space-y-3">
-            <h3 className="font-bold text-slate-900 text-[10px] uppercase tracking-wider">
-              Active Coordination Clusters ({clusters.length})
-            </h3>
+        )}
 
-            <div className="space-y-3">
-              {clusters.map((cluster) => {
-                const isSelected = cluster.id === activeCluster?.id;
-                return (
+        {/* Universal Workflow Lifecycle Banner */}
+        {activeCase && (
+          <WorkflowLifecycleBanner
+            status={activeCase.status}
+            strategy={activeCase.selectedStrategy || activeCase.recommendedStrategy}
+            caseNumber={activeCase.caseNumber}
+            roadName={activeCase.roadName}
+            departmentsCount={activeCase.participatingDepartments?.length || 1}
+            projectsCount={activeCase.relatedProjectIds?.length || 1}
+            currentActorRole={
+              activeCase.status === 'LEADERSHIP_REVIEW'
+                ? 'Municipal Commissioner (IAS)'
+                : activeCase.status === 'CONTRACTOR_ALLOCATED' || activeCase.status === 'APPROVED'
+                ? 'Executive Engineer (Owning Dept)'
+                : activeCase.status === 'IN_EXECUTION'
+                ? 'Assigned EPC Contractor'
+                : activeCase.status.includes('QC')
+                ? 'Quality & Safety Inspector'
+                : 'Utility Executive Engineer'
+            }
+            currentActorDepartment={
+              activeCase.status === 'LEADERSHIP_REVIEW'
+                ? 'Municipal Leadership & Higher Authority'
+                : activeCase.participatingDepartments?.find((d) => d.isOwner)?.departmentName || 'Lead Utility Dept'
+            }
+            onRefresh={fetchCases}
+          />
+        )}
+
+        {/* Unified Tab Navigation */}
+        <div className="flex items-center gap-2 border-b border-slate-200 overflow-x-auto pb-1">
+          {[
+            { id: 'OVERVIEW', label: 'Case Overview & GIS', icon: Layers },
+            { id: 'AI_PLANS', label: 'AI Candidate Plans', icon: Sparkles },
+            { id: 'TECH_REVIEW', label: 'Technical Review & Concurrence', icon: UserCheck },
+            { id: 'LEADERSHIP', label: 'Leadership Sanction Package', icon: ShieldCheck },
+            { id: 'CONTRACTOR', label: 'Contractor Allocation', icon: HardHat },
+            { id: 'EXECUTION_QC', label: 'Stage Execution & QC Gate', icon: FileCheck2 },
+            { id: 'AUDIT', label: 'Audit Timeline', icon: Clock },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+                  isActive
+                    ? 'bg-blue-900 text-white shadow-xs'
+                    : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/80'
+                }`}
+              >
+                <Icon className={`w-4 h-4 ${isActive ? 'text-blue-300' : 'text-slate-400'}`} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* TAB 1: OVERVIEW & GIS */}
+        {activeTab === 'OVERVIEW' && activeCase && (
+          <div className="space-y-6 animate-in fade-in">
+            {/* Quick Metrics Bar */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs">
+                <div className="text-[10px] uppercase font-bold text-slate-500">CORRIDOR PROJECTS</div>
+                <div className="text-xl font-black text-slate-900 mt-1">
+                  {activeCase.relatedProjectIds?.length || 1} Projects
+                </div>
+                <div className="text-[10px] text-slate-500 font-medium mt-0.5">
+                  {activeCase.participatingDepartments?.length || 1} Departments
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs">
+                <div className="text-[10px] uppercase font-bold text-slate-500">PROJECTED SAVINGS</div>
+                <div className="text-xl font-black text-emerald-700 mt-1">
+                  ₹{(activeCase.projectedCostSavedINR / 100000).toFixed(1)} Lakhs
+                </div>
+                <div className="text-[10px] text-emerald-600 font-medium mt-0.5">
+                  {activeCase.projectedExcavationsAvoided} Redundant Cuts Avoided
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs">
+                <div className="text-[10px] uppercase font-bold text-slate-500">TRAFFIC MITIGATION</div>
+                <div className="text-xl font-black text-blue-900 mt-1">
+                  {activeCase.trafficDisruptionReductionPct}% Delay Reduction
+                </div>
+                <div className="text-[10px] text-blue-600 font-medium mt-0.5">
+                  CTTP 2016 Baseline Model
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs">
+                <div className="text-[10px] uppercase font-bold text-slate-500">EXECUTION WINDOW</div>
+                <div className="text-xl font-black text-slate-900 mt-1">
+                  {activeCase.executionWindow?.durationDays || 60} Days
+                </div>
+                <div className="text-[10px] text-slate-500 font-medium mt-0.5">
+                  Unified Single-Window Window
+                </div>
+              </div>
+            </div>
+
+            {/* Participating Departments & Concurrence Matrix */}
+            <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Building className="w-4 h-4 text-blue-900" />
+                    <span>Participating Municipal Utility Agencies & Concurrence Status</span>
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Explicit department ownership vs technical concurrence recorded for subsurface pipe/cable layout.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {activeCase.participatingDepartments?.map((dept, idx) => (
                   <div
-                    key={cluster.id}
-                    onClick={() => setSelectedClusterId(cluster.id)}
-                    className={`p-5 rounded-2xl border transition-all cursor-pointer space-y-2.5 ${
-                      isSelected
-                        ? 'bg-white border-blue-600 shadow-sm ring-1 ring-blue-600'
-                        : 'bg-slate-50/70 border-slate-200 hover:bg-white hover:border-slate-300'
+                    key={idx}
+                    className={`p-4 rounded-xl border transition-all ${
+                      dept.isOwner
+                        ? 'bg-blue-50/70 border-blue-300 ring-1 ring-blue-300'
+                        : 'bg-slate-50 border-slate-200'
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 font-mono">
-                          {cluster.clusterCode}
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <span className="font-bold text-xs text-slate-900 truncate">
+                        {dept.departmentName}
+                      </span>
+                      {dept.isOwner && (
+                        <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-200 text-blue-900">
+                          LEAD OWNER
                         </span>
-                        <h4 className="font-bold text-slate-900 text-sm mt-1 leading-snug">
-                          {cluster.name}
-                        </h4>
+                      )}
+                    </div>
+
+                    <div className="space-y-1.5 text-xs text-slate-600">
+                      <div className="flex items-center gap-1 text-[11px]">
+                        <span className="text-slate-400">Officer:</span>
+                        <span className="font-semibold text-slate-800">{dept.officerName || 'Designated EE'}</span>
                       </div>
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider shrink-0 ${
-                          cluster.status === 'ACCEPTED'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : 'bg-amber-50 text-amber-700 border border-amber-200'
-                        }`}
-                      >
-                        {cluster.status}
-                      </span>
+                      <div className="flex items-center gap-1 text-[11px]">
+                        <span className="text-slate-400">Designation:</span>
+                        <span className="text-slate-700">{dept.officerDesignation || 'Executive Engineer'}</span>
+                      </div>
+                      <div className="pt-2 border-t border-slate-200/70 flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Concurrence:</span>
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            dept.concurrenceStatus === 'CONCURRED'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : dept.concurrenceStatus === 'REJECTED'
+                              ? 'bg-rose-100 text-rose-800'
+                              : 'bg-amber-100 text-amber-900'
+                          }`}
+                        >
+                          {dept.concurrenceStatus}
+                        </span>
+                      </div>
+                      {dept.concurrenceNotes && (
+                        <p className="text-[10px] text-slate-500 italic pt-1 border-t border-slate-200/40">
+                          "{dept.concurrenceNotes}"
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Depth Cross-Section & Execution Sequence */}
+            <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Layers className="w-4 h-4 text-blue-900" />
+                <span>Geotechnical Subsurface Cross-Section & Depth Ordering</span>
+              </h3>
+              <p className="text-xs text-slate-500">
+                Layered depth sequence ensures deepest utilities are installed first, completely preventing re-excavation.
+              </p>
+
+              <div className="space-y-2.5">
+                {activeCase.executionSequence?.map((step, idx) => (
+                  <div
+                    key={idx}
+                    className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-3 text-xs"
+                  >
+                    <div className="w-6 h-6 rounded-lg bg-blue-900 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                      {idx + 1}
+                    </div>
+                    <span className="font-semibold text-slate-800 flex-1">{step}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: AI CANDIDATE PLANS */}
+        {activeTab === 'AI_PLANS' && activeCase && (
+          <div className="space-y-6 animate-in fade-in">
+            <div className="p-5 rounded-2xl bg-gradient-to-r from-blue-900 to-indigo-950 text-white space-y-2">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-amber-300" />
+                <h3 className="text-base font-bold">AI Multi-Candidate Coordination Analysis</h3>
+                <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-amber-400/20 text-amber-300 border border-amber-300/30">
+                  {activeCase.aiConfidence}% CONFIDENCE
+                </span>
+              </div>
+              <p className="text-xs text-slate-200 max-w-3xl leading-relaxed">
+                {activeCase.aiSummary}
+              </p>
+            </div>
+
+            {/* Candidate Plans Comparison */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {activeCase.candidatePlans?.map((plan) => {
+                const isSelected = activeCase.selectedPlanId === plan.planId;
+                return (
+                  <div
+                    key={plan.planId}
+                    className={`p-5 rounded-2xl border flex flex-col justify-between transition-all ${
+                      isSelected
+                        ? 'bg-white border-blue-900 ring-2 ring-blue-900 shadow-md'
+                        : 'bg-white border-slate-200 shadow-xs'
+                    }`}
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 text-slate-800">
+                          {plan.planId}
+                        </span>
+                        {plan.isRecommended && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                            <Sparkles className="w-3 h-3 text-emerald-700" />
+                            RECOMMENDED
+                          </span>
+                        )}
+                      </div>
+
+                      <h4 className="text-sm font-bold text-slate-900 leading-snug">
+                        {plan.planName}
+                      </h4>
+
+                      <p className="text-xs text-slate-600 leading-relaxed">
+                        {plan.strategySummary}
+                      </p>
+
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5 text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Duration:</span>
+                          <span className="font-bold text-slate-800">{plan.totalDurationDays} Days</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Road Cuts:</span>
+                          <span className="font-bold text-slate-800">{plan.excavationEventsCount} Cuts</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Financial Saving:</span>
+                          <span className="font-bold text-emerald-700">₹{(plan.estimatedFinancialSavingINR / 100000).toFixed(1)}L</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Traffic Delay Cut:</span>
+                          <span className="font-bold text-blue-900">{plan.trafficDisruptionReductionPct}%</span>
+                        </div>
+                      </div>
+
+                      {/* Pros & Cons */}
+                      <div className="space-y-2 pt-2 border-t border-slate-100 text-xs">
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-bold text-emerald-700 uppercase">Advantages:</span>
+                          {plan.pros?.map((p, i) => (
+                            <div key={i} className="text-[11px] text-slate-700 flex items-start gap-1.5">
+                              <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                              <span>{p}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-bold text-rose-700 uppercase">Risks:</span>
+                          {plan.cons?.map((c, i) => (
+                            <div key={i} className="text-[11px] text-slate-700 flex items-start gap-1.5">
+                              <XCircle className="w-3.5 h-3.5 text-rose-500 shrink-0 mt-0.5" />
+                              <span>{c}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
 
-                    <p className="text-xs text-slate-600">
-                      Corridor: <span className="text-slate-900 font-semibold">{cluster.roadName}</span>
-                    </p>
-
-                    <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-200/60">
-                      <span className="text-slate-500">{cluster.projects?.length || 0} Utilities Synced</span>
-                      <span className="font-bold text-emerald-700">
-                        Saved: ₹{((cluster.estimatedCostSavedINR || 0) / 10000000).toFixed(2)} Cr
-                      </span>
-                    </div>
+                    {/* Action */}
+                    {isCaseOwner && (
+                      <div className="pt-4 mt-4 border-t border-slate-100">
+                        <button
+                          onClick={() =>
+                            handleSelectStrategy(
+                              plan.planId === 'PLAN_A' || plan.planId === 'PLAN_B' ? 'COORDINATED' : 'STANDALONE',
+                              plan.planId
+                            )
+                          }
+                          disabled={isProcessing}
+                          className={`w-full py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                            isSelected
+                              ? 'bg-blue-900 text-white shadow-xs'
+                              : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                          }`}
+                        >
+                          {isSelected ? (
+                            <>
+                              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                              <span>Current Selected Plan</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>Select {plan.planId} Strategy</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
           </div>
+        )}
 
-          {/* Right Column (2 cols): Selected Cluster Deep Dive */}
-          {activeCluster && (
-            <div className="lg:col-span-2 space-y-6">
-              {/* Cluster Header & AI Synthesis */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-6 md:p-8 shadow-xs space-y-6">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
-                  <div>
-                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 uppercase tracking-wider">
-                      {activeCluster.roadName} • {activeCluster.clusterCode}
+        {/* TAB 3: TECHNICAL REVIEW & CONCURRENCE */}
+        {activeTab === 'TECH_REVIEW' && activeCase && (
+          <div className="space-y-6 animate-in fade-in">
+            <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <UserCheck className="w-4 h-4 text-blue-900" />
+                  <span>Technical Engineer Decision & Departmental Concurrence Workspace</span>
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Owning department engineer sets the technical strategy; affected utility engineers review subsurface clearance.
+                </p>
+              </div>
+
+              {/* Action 1: Affected Department Concurrence */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">
+                    Affected Utility Clearance (Current User: {currentUser?.department})
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    Logged as {currentUser?.name} ({currentUser?.designation})
+                  </span>
+                </div>
+
+                <textarea
+                  value={concurrenceNotes}
+                  onChange={(e) => setConcurrenceNotes(e.target.value)}
+                  placeholder="Enter technical notes regarding pipeline alignment, GPR verification, or depth clearances..."
+                  className="w-full p-3 rounded-xl border border-slate-300 text-xs bg-white focus:ring-2 focus:ring-blue-900 resize-none h-20"
+                />
+
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <button
+                    onClick={() => handleGrantConcurrence('CONCURRED')}
+                    disabled={isProcessing}
+                    className="px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Grant Subsurface Concurrence</span>
+                  </button>
+                  <button
+                    onClick={() => handleGrantConcurrence('CONCERNS_RAISED')}
+                    disabled={isProcessing}
+                    className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  >
+                    <AlertTriangle className="w-4 h-4" />
+                    <span>Raise Utility Concern</span>
+                  </button>
+                  <button
+                    onClick={() => handleGrantConcurrence('REJECTED')}
+                    disabled={isProcessing}
+                    className="px-4 py-2 rounded-xl bg-rose-700 hover:bg-rose-800 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  >
+                    <XCircle className="w-4 h-4" />
+                    <span>Object / Reject Alignment</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Action 2: Lead Owning Engineer Propose to Leadership */}
+              {isCaseOwner && (
+                <div className="p-4 rounded-xl bg-blue-50/80 border border-blue-200 space-y-3">
+                  <div className="space-y-1">
+                    <span className="text-xs font-bold text-blue-950">
+                      Lead Department Technical Approval & Proposal to Leadership
                     </span>
-                    <h2 className="text-xl font-bold text-slate-900 mt-2">
-                      {activeCluster.name}
-                    </h2>
+                    <p className="text-xs text-blue-800">
+                      As the lead utility owner ({activeCase.participatingDepartments?.find((d) => d.isOwner)?.departmentName}), you have statutory authority to forward this joint excavation dossier to the Municipal Commissioner for final sanction.
+                    </p>
                   </div>
-                  <div className="text-right">
-                    <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Unified Excavation Window</div>
-                    <div className="text-xs font-bold text-slate-900 font-mono mt-0.5 flex items-center gap-1.5 justify-end">
-                      <Calendar className="w-3.5 h-3.5 text-blue-600" />
-                      <span>{activeCluster.recommendedWindowStart} → {activeCluster.recommendedWindowEnd}</span>
-                    </div>
+
+                  <button
+                    onClick={handleProposeToLeadership}
+                    disabled={isProcessing || activeCase.status === 'LEADERSHIP_REVIEW'}
+                    className="px-5 py-2.5 rounded-xl bg-blue-900 hover:bg-blue-950 text-white font-bold text-xs flex items-center gap-2 cursor-pointer shadow-sm"
+                  >
+                    <ArrowRight className="w-4 h-4" />
+                    <span>Propose Coordinated Package to Leadership</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: LEADERSHIP SANCTION PACKAGE */}
+        {activeTab === 'LEADERSHIP' && activeCase && (
+          <div className="space-y-6 animate-in fade-in">
+            <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-5">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                <div className="space-y-1">
+                  <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-200 uppercase font-mono">
+                    STATUTORY HIGHER AUTHORITY REVIEW
+                  </span>
+                  <h3 className="text-base font-bold text-slate-900">
+                    Municipal Commissioner & Higher Authority Decision Dossier
+                  </h3>
+                </div>
+                <div className="text-right text-xs">
+                  <span className="text-slate-400">Current Status:</span>
+                  <div className="font-bold text-slate-800">{activeCase.status}</div>
+                </div>
+              </div>
+
+              {/* Dossier Summary */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                  <div className="font-bold text-slate-800">Proposed Strategy & Financials</div>
+                  <div className="flex justify-between py-1 border-b border-slate-200/60">
+                    <span className="text-slate-500">Selected Strategy:</span>
+                    <span className="font-bold text-blue-900">{activeCase.selectedStrategy} ({activeCase.selectedPlanId})</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-200/60">
+                    <span className="text-slate-500">Public Budget Savings:</span>
+                    <span className="font-bold text-emerald-700">₹{(activeCase.projectedCostSavedINR / 100000).toFixed(1)} Lakhs</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-200/60">
+                    <span className="text-slate-500">Avoided Road Cuts:</span>
+                    <span className="font-bold text-slate-800">{activeCase.projectedExcavationsAvoided} Cuts</span>
                   </div>
                 </div>
 
-                {/* AI Strategy Box */}
-                <div className="p-5 rounded-xl bg-blue-50/60 border border-blue-200 space-y-2 text-xs">
-                  <div className="flex items-center gap-2 font-bold text-blue-800 uppercase text-[10px] tracking-wider">
-                    <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                    <span>AI Multi-Utility Coordination Strategy</span>
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                  <div className="font-bold text-slate-800">Department Concurrence Matrix</div>
+                  {activeCase.participatingDepartments?.map((d, i) => (
+                    <div key={i} className="flex justify-between py-1 border-b border-slate-200/60">
+                      <span className="text-slate-600">{d.departmentName}:</span>
+                      <span className="font-bold text-emerald-700">{d.concurrenceStatus}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Commissioner Decision Action */}
+              {isCommissionerOrLeadership ? (
+                <div className="p-5 rounded-2xl bg-purple-50/70 border border-purple-200 space-y-4">
+                  <div className="space-y-1">
+                    <span className="text-xs font-bold text-purple-950">
+                      Authority Sanction Order (Dr. Pravin Gedam IAS / Higher Authority)
+                    </span>
+                    <p className="text-xs text-purple-900">
+                      Issuing approval authorizes single-window contractor mobilization, permit issuance, and binding cost-sharing.
+                    </p>
                   </div>
-                  <p className="text-slate-800 leading-relaxed text-xs">
-                    {aiResult?.jointSchedulingStrategy ||
-                      aiResult?.executiveSummary ||
-                      (activeCluster as any)?.aiRecommendation?.jointSchedulingStrategy ||
-                      activeCluster.aiReasoning?.[0] ||
-                      'Consolidates multi-department excavation proposals into a single 22-day coordinated window, eliminating repetitive road surface cuts.'}
+
+                  <textarea
+                    value={leadershipRemarks}
+                    onChange={(e) => setLeadershipRemarks(e.target.value)}
+                    placeholder="Enter statutory sanction order remarks, special traffic conditions, or revision instructions..."
+                    className="w-full p-3 rounded-xl border border-purple-300 text-xs bg-white focus:ring-2 focus:ring-purple-900 resize-none h-20"
+                  />
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      onClick={() => handleLeadershipDecision('APPROVED')}
+                      disabled={isProcessing}
+                      className="px-5 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center gap-2 cursor-pointer shadow-xs"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Grant Statutory Approval</span>
+                    </button>
+                    <button
+                      onClick={() => handleLeadershipDecision('RETURNED_FOR_REVISION')}
+                      disabled={isProcessing}
+                      className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center gap-2 cursor-pointer shadow-xs"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                      <span>Return for Modification</span>
+                    </button>
+                    <button
+                      onClick={() => handleLeadershipDecision('REJECTED')}
+                      disabled={isProcessing}
+                      className="px-4 py-2.5 rounded-xl bg-rose-700 hover:bg-rose-800 text-white font-bold text-xs flex items-center gap-2 cursor-pointer shadow-xs"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      <span>Reject Application</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-slate-100 border border-slate-200 text-xs text-slate-600 flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-slate-400" />
+                  <span>Statutory approval actions are restricted to Municipal Commissioner & Higher Authority.</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 5: CONTRACTOR ALLOCATION */}
+        {activeTab === 'CONTRACTOR' && activeCase && (
+          <div className="space-y-6 animate-in fade-in">
+            <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <HardHat className="w-4 h-4 text-blue-900" />
+                  <span>Verified EPC Contractor Allocation & Site Mobilization</span>
+                </h3>
+                <p className="text-xs text-slate-500">
+                  After leadership approval, the lead owning engineer assigns a vetted contractor to execute the single-window trench.
+                </p>
+              </div>
+
+              {/* Current Allocation Record */}
+              {activeCase.contractorAllocations && activeCase.contractorAllocations.length > 0 ? (
+                <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-emerald-900">Assigned EPC Contractor:</span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-200 text-emerald-900">
+                      MOBILIZED
+                    </span>
+                  </div>
+                  <div className="text-sm font-bold text-slate-900">
+                    {activeCase.contractorAllocations[0].contractorName} ({activeCase.contractorAllocations[0].contractorId})
+                  </div>
+                  <p className="text-slate-600">
+                    Scope: {activeCase.contractorAllocations[0].workScope}
                   </p>
-                  <div className="text-xs text-slate-600 pt-1">
-                    <strong className="text-slate-900">Restoration Policy: </strong>
-                    {aiResult?.restorationStrategy ||
-                      (activeCluster as any)?.aiRecommendation?.restorationStrategy ||
-                      'Single continuous Bituminous Concrete (BC) resurfacing with 95%+ Proctor compaction testing and joint trench backfilling.'}
-                  </div>
                 </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900">
+                  No contractor currently assigned. Select a verified contractor below to mobilize the corridor.
+                </div>
+              )}
 
-                {/* SYNCHRONIZED UTILITY WORK PACKAGES */}
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Building className="w-4 h-4 text-blue-600" />
-                      <h3 className="font-bold text-slate-900 text-sm">
-                        Synchronized Infrastructure Projects ({projects.length})
-                      </h3>
-                    </div>
-                    <span className="text-[10px] text-slate-500 font-semibold">1 Coordinated Dig • 1 Restoration</span>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {projects.map((proj) => (
-                      <div
-                        key={proj.id}
-                        className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3 text-xs"
-                      >
-                        <div className="space-y-0.5 min-w-0">
-                          <div className="font-bold text-slate-900 truncate">{proj.name}</div>
-                          <div className="text-[11px] text-slate-500 flex items-center gap-2">
-                            <span className="font-semibold text-slate-700">{proj.department}</span>
-                            <span>•</span>
-                            <span className="font-mono">{proj.code}</span>
-                          </div>
-                        </div>
-                        {onSelectProject && (
-                          <button
-                            onClick={() => onSelectProject(proj)}
-                            className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold shrink-0 transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
-                          >
-                            <Sparkles className="w-3 h-3" />
-                            <span>Analysis Center →</span>
-                          </button>
-                        )}
-                      </div>
+              {/* Assignment Form */}
+              {(isCaseOwner || isCommissionerOrLeadership) && (
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3 text-xs">
+                  <label className="font-bold text-slate-800">Select Verified Municipal Contractor:</label>
+                  <select
+                    value={selectedContractorId}
+                    onChange={(e) => setSelectedContractorId(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-slate-300 bg-white font-semibold text-slate-800 cursor-pointer"
+                  >
+                    {contractorsList.map((c) => (
+                      <option key={c.contractorId} value={c.contractorId}>
+                        {c.contractorName} • {c.specialization} ({c.capacity})
+                      </option>
                     ))}
-                  </div>
+                  </select>
+
+                  <button
+                    onClick={handleAllocateContractor}
+                    disabled={isProcessing}
+                    className="px-5 py-2.5 rounded-xl bg-blue-900 hover:bg-blue-950 text-white font-bold text-xs flex items-center gap-2 cursor-pointer shadow-xs"
+                  >
+                    <HardHat className="w-4 h-4" />
+                    <span>Assign Contractor & Activate Road Opening Permit</span>
+                  </button>
                 </div>
+              )}
+            </div>
+          </div>
+        )}
 
-                {/* DEPTH-WISE CROSS-SECTION TRENCH VISUALIZER */}
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Layers className="w-4 h-4 text-blue-600" />
-                      <h3 className="font-bold text-slate-900 text-sm">
-                        Underground Depth-Wise Trench Sequencing
-                      </h3>
-                    </div>
-                    <span className="text-[10px] font-semibold text-slate-500">IRC:SP:55 & NMC Standard</span>
-                  </div>
-
-                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2.5 font-mono text-xs">
-                    {/* Top Layer: Road Surface */}
-                    <div className="p-3 rounded-lg bg-white border border-slate-200 shadow-2xs flex items-center justify-between">
-                      <span className="text-slate-900 font-bold">0.0m - 0.2m: Bituminous Concrete (BC) & WMM Surface</span>
-                      <span className="text-emerald-700 text-[10px] font-sans font-bold uppercase tracking-wider bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">Single Uniform Resurfacing</span>
-                    </div>
-
-                    {/* Shallow Utility */}
-                    <div className="p-3 rounded-lg bg-purple-50 border border-purple-200 flex items-center justify-between">
-                      <span className="text-purple-900 font-semibold">0.8m - 1.2m: Telecom 5G OFC Ducts & Smart City Sensors</span>
-                      <span className="text-purple-700 text-[10px] font-sans font-medium">Telecom & BharatNet</span>
-                    </div>
-
-                    {/* Power Utility */}
-                    <div className="p-3 rounded-lg bg-yellow-50 border border-yellow-200 flex items-center justify-between">
-                      <span className="text-yellow-900 font-semibold">1.5m - 1.8m: MSEDCL 33kV Power Distribution Cables</span>
-                      <span className="text-yellow-800 text-[10px] font-sans font-medium">Electricity Grid (MSEDCL)</span>
-                    </div>
-
-                    {/* Mid Gas Utility */}
-                    <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-between">
-                      <span className="text-amber-900 font-semibold">1.8m - 2.0m: MNGL PNG Medium-Pressure MDPE Gas Pipelines</span>
-                      <span className="text-amber-800 text-[10px] font-sans font-medium">MNGL City Gas</span>
-                    </div>
-
-                    {/* Deepest Utility */}
-                    <div className="p-3 rounded-lg bg-sky-50 border border-sky-200 flex items-center justify-between">
-                      <span className="text-sky-900 font-semibold">2.4m - 3.2m: 1200mm Potable Water Main & Gravity Drainage</span>
-                      <span className="text-sky-800 text-[10px] font-sans font-medium">Water & Sewerage Board</span>
-                    </div>
-                  </div>
+        {/* TAB 6: STAGE EXECUTION & QC GATE */}
+        {activeTab === 'EXECUTION_QC' && activeCase && (
+          <div className="space-y-6 animate-in fade-in">
+            <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-5">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="space-y-1">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <FileCheck2 className="w-4 h-4 text-blue-900" />
+                    <span>6-Stage Execution & Hard Quality Control (QC) Gate</span>
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Contractors complete stages sequentially. A failed QC locks the workflow and requires verified rework.
+                  </p>
                 </div>
-
-                {/* SHARED COST ALLOCATION MATRIX */}
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <IndianRupee className="w-4 h-4 text-emerald-600" />
-                      <h3 className="font-bold text-slate-900 text-sm">
-                        Shared Restoration Cost Allocation
-                      </h3>
-                    </div>
-                    <span className="text-xs text-emerald-700 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                      Net Municipal Savings: ₹{((activeCluster.estimatedCostSavedINR || 38200000) / 10000000).toFixed(2)} Cr
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                    {costAllocations.map((alloc: any) => (
-                      <div
-                        key={alloc.department}
-                        className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5"
-                      >
-                        <div className="font-bold text-slate-900 text-xs">{alloc.department}</div>
-                        <div className="text-[10px] text-slate-500">Share Ratio: {alloc.sharePercentage}%</div>
-                        <div className="font-bold text-slate-900 text-sm">
-                          Allocated: ₹{(alloc.allocatedCostINR / 100000).toFixed(2)} L
-                        </div>
-                        <div className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1">
-                          <TrendingDown className="w-3 h-3" />
-                          <span>Saved: ₹{(alloc.savingsINR / 100000).toFixed(2)} L</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* MULTI-AGENCY SIGN-OFF & CONSENSUS BOARD */}
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <ShieldCheck className="w-4 h-4 text-blue-600" />
-                      <h3 className="font-bold text-slate-900 text-sm">
-                        Inter-Agency Consensus & Approvals
-                      </h3>
-                    </div>
-                    <span className="text-xs text-slate-500 font-semibold">
-                      {signedCount} of {totalCount} Signed
-                    </span>
-                  </div>
-
-                  <div className="space-y-2">
-                    {approvalsList.map((appr: any) => (
-                      <div
-                        key={appr.department}
-                        className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs"
-                      >
-                        <div>
-                          <div className="font-bold text-slate-900">{appr.department}</div>
-                          <div className="text-[11px] text-slate-500 mt-0.5">
-                            {appr.approvedBy ? `Signed by: ${appr.approvedBy} (${appr.approvedByDesignation || 'Officer'})` : 'Awaiting sign-off'}
-                          </div>
-                        </div>
-
-                        <span
-                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                            appr.status === 'APPROVED'
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : 'bg-amber-50 text-amber-700 border border-amber-200'
-                          }`}
-                        >
-                          {appr.status}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Role-Based Consensus Action */}
-                  {currentUser?.role === 'CONTRACTOR' || currentUser?.role === 'CITIZEN' ? (
-                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs flex items-center gap-3">
-                      <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <div className="text-xs text-slate-600">
-                        <span className="font-semibold text-slate-900">Consensus Progress Tracking:</span> As a registered contractor/citizen, you have read-only visibility into multi-agency joint trench consensus. Sign-offs are executed by departmental directors.
-                      </div>
-                    </div>
-                  ) : hasAlreadyApproved ? (
-                    <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                      <div className="flex items-center gap-2.5">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <div>
-                          <div className="font-bold text-xs text-emerald-900">
-                            Departmental Consensus Approved
-                          </div>
-                          <div className="text-[11px] text-emerald-700">
-                            Signed by {myDeptApproval?.approvedBy || currentUser?.name} ({myDeptApproval?.approvedByDesignation || currentUser?.designation})
-                          </div>
-                        </div>
-                      </div>
-                      <span className="px-3 py-1 rounded-full bg-emerald-600 text-white text-[10px] font-bold uppercase tracking-wider">
-                        Approved & Sealed
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
-                      <div className="text-xs text-slate-600">
-                        Sign consensus as <strong className="text-slate-900">{currentUser?.name}</strong> ({currentUser?.designation})
-                      </div>
-                      <button
-                        onClick={handleApproveCluster}
-                        disabled={isApproving}
-                        className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 shrink-0"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5 text-white" />
-                        {isApproving ? 'Recording Sign-off...' : 'Grant Multi-Agency Approval'}
-                      </button>
-                    </div>
+                <div className="flex items-center gap-2">
+                  {activeCase.status === 'ALL_STAGES_COMPLETED' && (
+                    <button
+                      onClick={handleFinalizeClosure}
+                      disabled={isProcessing}
+                      className="px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Verify Final Restoration & Commit Road History</span>
+                    </button>
                   )}
                 </div>
               </div>
+
+              {/* Stages List */}
+              <div className="space-y-4">
+                {activeCase.stages?.map((stage, idx) => {
+                  const isCurrentActive = stage.status === 'IN_PROGRESS' || stage.status === 'COMPLETED_PENDING_QC' || stage.status === 'QC_IN_PROGRESS' || stage.status === 'REWORK_REQUIRED';
+                  return (
+                    <div
+                      key={stage.stageId}
+                      className={`p-4 rounded-2xl border transition-all space-y-3 ${
+                        stage.status === 'QC_PASSED'
+                          ? 'bg-emerald-50/50 border-emerald-200'
+                          : stage.status === 'REWORK_REQUIRED'
+                          ? 'bg-rose-50 border-rose-300 ring-1 ring-rose-300'
+                          : isCurrentActive
+                          ? 'bg-white border-blue-900 ring-2 ring-blue-900 shadow-sm'
+                          : 'bg-slate-50 border-slate-200 opacity-60'
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5">
+                          <span className="w-6 h-6 rounded-full bg-blue-900 text-white font-bold text-xs flex items-center justify-center shrink-0">
+                            {stage.sequence}
+                          </span>
+                          <span className="font-bold text-xs text-slate-900">
+                            {stage.name}
+                          </span>
+                        </div>
+
+                        <span
+                          className={`px-2.5 py-0.5 rounded text-[10px] font-bold font-mono ${
+                            stage.status === 'QC_PASSED'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : stage.status === 'REWORK_REQUIRED'
+                              ? 'bg-rose-100 text-rose-800'
+                              : stage.status === 'COMPLETED_PENDING_QC'
+                              ? 'bg-amber-100 text-amber-900'
+                              : 'bg-slate-200 text-slate-700'
+                          }`}
+                        >
+                          {stage.status.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-slate-600">
+                        {stage.workDoneNotes}
+                      </p>
+
+                      {/* Interactive Controls based on Role */}
+                      <div className="pt-2 border-t border-slate-200/60 flex flex-wrap items-center justify-between gap-3 text-xs">
+                        {/* Contractor Action */}
+                        {(isContractor || isCaseOwner || isCommissionerOrLeadership) && stage.status !== 'QC_PASSED' && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleContractorCompleteStage(stage.stageId)}
+                              disabled={isProcessing}
+                              className="px-3.5 py-1.5 rounded-lg bg-blue-900 hover:bg-blue-950 text-white font-bold text-[11px] cursor-pointer"
+                            >
+                              Mark Stage Complete & Request QC
+                            </button>
+                          </div>
+                        )}
+
+                        {/* QC Assignment Action */}
+                        {(isCaseOwner || isCommissionerOrLeadership) && stage.status === 'COMPLETED_PENDING_QC' && (
+                          <button
+                            onClick={() => handleAssignQCInspector(stage.stageId)}
+                            disabled={isProcessing}
+                            className="px-3 py-1.5 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-[11px] cursor-pointer"
+                          >
+                            Assign QC Inspector (Er. Mahesh Patil)
+                          </button>
+                        )}
+
+                        {/* Inspector Action (PASS / FAIL) */}
+                        {(isInspector || isCommissionerOrLeadership || isCaseOwner) &&
+                          (stage.status === 'QC_IN_PROGRESS' || stage.status === 'COMPLETED_PENDING_QC' || stage.status === 'REWORK_REQUIRED') && (
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleRecordQCDecision(stage.stageId, 'PASS')}
+                                disabled={isProcessing}
+                                className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] flex items-center gap-1 cursor-pointer"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>QC Pass (Unlock Next)</span>
+                              </button>
+                              <button
+                                onClick={() => handleRecordQCDecision(stage.stageId, 'FAIL')}
+                                disabled={isProcessing}
+                                className="px-3 py-1.5 rounded-lg bg-rose-700 hover:bg-rose-800 text-white font-bold text-[11px] flex items-center gap-1 cursor-pointer"
+                              >
+                                <XCircle className="w-3.5 h-3.5" />
+                                <span>QC Fail (Demand Rework)</span>
+                              </button>
+                            </div>
+                          )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          )}
-        </div>
-      )}
-    </div>
+          </div>
+        )}
+
+        {/* TAB 7: AUDIT TIMELINE */}
+        {activeTab === 'AUDIT' && activeCase && (
+          <div className="space-y-6 animate-in fade-in">
+            <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-blue-900" />
+                  <span>Immutable Coordination Case & Statutory Decision Ledger</span>
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Every transition, strategy change, concurrence, and QC test is cryptographically logged with actor IDs.
+                </p>
+              </div>
+
+              <div className="relative pl-6 space-y-4 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
+                {activeCase.auditTimeline?.map((ev, i) => (
+                  <div key={ev.id || i} className="relative space-y-1 text-xs">
+                    <div className="absolute -left-6 top-1 w-3 h-3 rounded-full bg-blue-900 ring-4 ring-white" />
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-slate-900">{ev.action.replace(/_/g, ' ')}</span>
+                      <span className="text-slate-400 font-mono text-[10px]">
+                        {new Date(ev.timestamp).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="text-slate-600 font-medium">
+                      By {ev.actorName} ({ev.actorRole} • {ev.actorDepartment})
+                    </div>
+                    <p className="text-slate-700 bg-slate-50 p-2.5 rounded-xl border border-slate-200/60 text-[11px]">
+                      {ev.details}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </ErrorBoundary>
   );
 };

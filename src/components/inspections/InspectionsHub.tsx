@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Inspection, Project } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { WorkflowLifecycleBanner } from '../common/WorkflowLifecycleBanner';
 import { api } from '../../services/api';
 
 interface InspectionsHubProps {
@@ -40,6 +41,7 @@ export const InspectionsHub: React.FC<InspectionsHubProps> = ({
   const [aiAnalysisResult, setAiAnalysisResult] = useState<any>(null);
   const [isAnalyzingAI, setIsAnalyzingAI] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const selectedProj = projects.find((p) => p.id === selectedProjectId) || projects[0];
 
   const handleInspectAI = async () => {
     setIsAnalyzingAI(true);
@@ -93,6 +95,20 @@ export const InspectionsHub: React.FC<InspectionsHubProps> = ({
 
   return (
     <div className="space-y-6 pb-12">
+      {/* Universal Workflow Lifecycle Banner */}
+      {selectedProj && (
+        <WorkflowLifecycleBanner
+          status={selectedProj.status}
+          strategy={selectedProj.executionStrategy || 'COORDINATED'}
+          caseNumber={selectedProj.code}
+          roadName={selectedProj.roadName}
+          currentActorRole="Quality & Safety Inspector"
+          currentActorDepartment="Roads / PWD & Municipal QC Cell"
+          nextActionText="Inspector field audit and Proctor Density compaction test sign-off."
+          onRefresh={onRefreshData}
+        />
+      )}
+
       {/* Header */}
       <div className="bg-[#FFFFFF] border border-[#1A1A1A]/10 rounded-2xl p-6 md:p-8 shadow-2xs flex items-center justify-between">
         <div>
