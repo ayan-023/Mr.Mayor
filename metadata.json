@@ -1,0 +1,6 @@
+{
+  "name": "MR. MAYOR — Urban Infrastructure & Road Excavation Platform",
+  "description": "Unified urban infrastructure coordination and road excavation management platform with GIS conflict detection, AI scheduling, digital permits, and citizen reporting.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

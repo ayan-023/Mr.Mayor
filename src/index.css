@@ -1,0 +1,167 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+/* Indian National Flag Civic Color Grade & Authority Themes */
+:root {
+  --bg-canvas: #FAF9F6;
+  --bg-surface: #FFFFFF;
+  --bg-subtle: #F5F4F0;
+  --bg-muted: #EBE8E1;
+  --text-ink: #14181F;
+  --text-secondary: #4A5568;
+  --text-muted: #718096;
+  --border-editorial: rgba(20, 24, 31, 0.1);
+  --border-strong: rgba(20, 24, 31, 0.2);
+
+  /* Indian Tricolor Refined Civic Accents */
+  --flag-saffron: #E06D28;
+  --flag-saffron-light: #FFF5EE;
+  --flag-saffron-border: rgba(224, 109, 40, 0.25);
+  
+  --flag-green: #15803D;
+  --flag-green-light: #F0FDF4;
+  --flag-green-border: rgba(21, 128, 61, 0.25);
+  
+  --flag-navy: #1E3A8A;
+  --flag-navy-light: #EFF6FF;
+  --flag-navy-border: rgba(30, 58, 138, 0.25);
+
+  --accent-editorial: #14181F;
+  --accent-terracotta: #E06D28;
+  --accent-sage: #15803D;
+  --accent-slate: #1E3A8A;
+}
+
+/* Authority Role-Specific Themes */
+.theme-commissioner {
+  --role-accent: #D97706;
+  --role-accent-bg: #FFFBEB;
+  --role-accent-border: rgba(217, 119, 6, 0.3);
+  --role-badge-text: #B45309;
+}
+
+.theme-nodal {
+  --role-accent: #1E3A8A;
+  --role-accent-bg: #EFF6FF;
+  --role-accent-border: rgba(30, 58, 138, 0.3);
+  --role-badge-text: #1E3A8A;
+}
+
+.theme-engineer {
+  --role-accent: #15803D;
+  --role-accent-bg: #F0FDF4;
+  --role-accent-border: rgba(21, 128, 61, 0.3);
+  --role-badge-text: #166534;
+}
+
+.theme-inspector {
+  --role-accent: #C2410C;
+  --role-accent-bg: #FFF7ED;
+  --role-accent-border: rgba(194, 65, 12, 0.3);
+  --role-badge-text: #9A3412;
+}
+
+.theme-contractor {
+  --role-accent: #475569;
+  --role-accent-bg: #F8FAFC;
+  --role-accent-border: rgba(71, 85, 105, 0.3);
+  --role-badge-text: #334155;
+}
+
+.theme-citizen {
+  --role-accent: #2563EB;
+  --role-accent-bg: #F0F9FF;
+  --role-accent-border: rgba(37, 99, 235, 0.3);
+  --role-badge-text: #1D4ED8;
+}
+
+/* National Tricolor Top Ribbon */
+.tricolor-ribbon {
+  background: linear-gradient(90deg, #FF9933 0%, #FF9933 33.33%, #FFFFFF 33.33%, #FFFFFF 66.66%, #138808 66.66%, #138808 100%);
+  height: 3px;
+  width: 100%;
+}
+
+.tricolor-gradient-subtle {
+  background: linear-gradient(135deg, rgba(255, 153, 51, 0.05) 0%, rgba(255, 255, 255, 0.9) 50%, rgba(19, 136, 8, 0.05) 100%);
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', 'Geist', 'Roboto', Arial, system-ui, sans-serif;
+  background-color: #F8FAFC;
+  color: #0F172A;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Modern clean typography mappings */
+.font-serif-editorial,
+.font-sans-editorial {
+  font-family: 'Inter', 'Geist', 'Roboto', Arial, system-ui, sans-serif;
+}
+
+.font-mono-editorial {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Custom map marker & container styles */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  background: #F1F5F9 !important;
+  font-family: inherit;
+}
+
+.leaflet-tile-pane {
+  filter: saturate(0.9) contrast(1.02);
+}
+
+.custom-pulse-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  position: relative;
+}
+
+.custom-pulse-marker::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7);
+  }
+  70% {
+    transform: scale(1.6);
+    box-shadow: 0 0 0 8px rgba(37, 99, 235, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
+  }
+}
+
+/* Custom modern scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F1F5F9;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
