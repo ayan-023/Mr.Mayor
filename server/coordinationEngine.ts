@@ -343,7 +343,7 @@ export function runAICoordinationEngine(
     );
 
     const isTemporallyRelevant =
-      dateOverlap > 0 || (dateOverlap < 0 && Math.abs(dateOverlap) <= 45);
+      dateOverlap > 0 || (dateOverlap < 0 && Math.abs(dateOverlap) <= 90);
 
     if (isNearby && isTemporallyRelevant) {
       const compat = evaluateWorkCompatibility(targetProject.department, other.department);

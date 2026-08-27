@@ -102,6 +102,7 @@ export interface Road {
   surfaceType: RoadSurface;
   condition: RoadCondition;
   trafficClass: TrafficClass;
+
   lastResurfacedDate: string;
   protectionPeriodDays: number;
   protectionExpiryDate: string;
@@ -110,6 +111,8 @@ export interface Road {
   lengthKm: number;
   activeWorkCount: number;
   historicalExcavationsCount: number;
+  daysSinceLastResurfaced?: number;
+  ownerAgency?: string;
 }
 
 export type InfrastructureType =
@@ -138,23 +141,35 @@ export interface InfrastructureAsset {
 }
 
 export type ProjectStatus =
+  | 'PROPOSED'
+  | 'ANALYSIS_READY'
+  | 'UNDER_TECHNICAL_REVIEW'
+  | 'TECHNICAL_APPROVED'
+  | 'AWAITING_HIGHER_AUTHORITY'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'MODIFICATION_REQUESTED'
+  | 'PERMIT_READY'
+  | 'PERMIT_ISSUED'
+  | 'IN_PROGRESS'
+  | 'WORK_COMPLETED'
+  | 'INSPECTION_PENDING'
+  | 'INSPECTION_APPROVED'
+  | 'RESTORATION_IN_PROGRESS'
+  | 'VERIFICATION_REQUIRED'
+  | 'COMPLETED'
+  | 'CANCELLED'
   | 'DRAFT'
   | 'SUBMITTED'
   | 'VALIDATING'
   | 'CONFLICT_DETECTED'
   | 'COORDINATION'
   | 'PENDING_APPROVAL'
-  | 'APPROVED'
   | 'PERMITTED'
   | 'SCHEDULED'
-  | 'IN_PROGRESS'
-  | 'WORK_COMPLETED'
   | 'INSPECTION'
   | 'RESTORATION'
-  | 'RESTORATION_INSPECTION'
-  | 'COMPLETED'
-  | 'REJECTED'
-  | 'CANCELLED';
+  | 'RESTORATION_INSPECTION';
 
 export type TrafficImpact = 'Low' | 'Medium' | 'High' | 'Severe';
 export type ProjectPriority = 'Routine' | 'Planned' | 'High Priority' | 'Emergency';
@@ -187,6 +202,115 @@ export interface WorkProgressLog {
   loggedByRole?: string;
 }
 
+export type AIAnalysisStatus =
+  | 'NOT_ANALYZED'
+  | 'ANALYZING'
+  | 'ANALYSIS_READY'
+  | 'UNDER_REVIEW'
+  | 'OUTDATED'
+  | 'APPROVED_RECOMMENDATION'
+  | 'REJECTED_RECOMMENDATION'
+  | 'RE_ANALYSIS_REQUIRED';
+
+export type JointPlanStatus =
+  | 'NOT_PROPOSED'
+  | 'AI_RECOMMENDED'
+  | 'UNDER_TECHNICAL_REVIEW'
+  | 'TECHNICALLY_APPROVED'
+  | 'AWAITING_HIGHER_AUTHORITY'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'MODIFIED'
+  | 'SUPERSEDED';
+
+export type AIRecommendationType =
+  | 'COORDINATE_JOINT_DIG'
+  | 'SEQUENCE_WITH_EXISTING_WORK'
+  | 'DEFER_TO_NEXT_WINDOW'
+  | 'PROCEED_SEPARATELY'
+  | 'REQUIRES_TECHNICAL_REVIEW';
+
+export interface WorkflowStageRecord {
+  stageId: string;
+  stageName: string;
+  actorName: string;
+  actorRole: string;
+  actorDepartment?: string;
+  timestamp: string;
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'REJECTED' | 'SKIPPED';
+  comment?: string;
+  conditions?: string[];
+  documentUrl?: string;
+}
+
+export interface PlanVersion {
+  planId: string;
+  version: number;
+  author: string;
+  authorRole: string;
+  authorDepartment: string;
+  status: JointPlanStatus;
+  modificationSummary?: string;
+  timestamp: string;
+  selectedPlanId: 'PLAN_A' | 'PLAN_B' | 'PLAN_C';
+  candidatePlans: CandidateCoordinationPlan[];
+  recalculatedSavingsINR?: number;
+  conditions?: string[];
+}
+
+export interface PreAnalysisCheckResult {
+  roadOwnership: 'PWD' | 'NMC' | 'SMART_CITY' | 'NHAI' | 'RAILWAYS' | 'OTHER';
+  responsibleRoadAuthorityName: string;
+  responsibleRoadAuthorityRole: string;
+  responsibleApproverDesignation: string;
+  existingActiveProjectsCount: number;
+  plannedProjectsCount: number;
+  recentRestorationsCount: number;
+  reworkRisk: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  isMonsoonEmbargoActive: boolean;
+  isSimhasthaCorridor: boolean;
+  trafficSensitivity: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
+  sensitiveJunctions: string[];
+  earlyWarningAlerts: string[];
+}
+
+export interface TechnicalReviewSubmission {
+  projectId: string;
+  decision: 'APPROVE' | 'REQUEST_MODIFICATION' | 'REJECT' | 'FORWARD_HIGHER';
+  comment: string;
+  conditions?: string[];
+  modificationsRequested?: string;
+  selectedPlanId: 'PLAN_A' | 'PLAN_B' | 'PLAN_C';
+  reviewedBy: string;
+  reviewerDesignation: string;
+  reviewerDepartment: string;
+  reviewedAt: string;
+}
+
+export interface HigherAuthorityReviewSubmission {
+  projectId: string;
+  decision: 'APPROVE' | 'REJECT' | 'RETURN_FOR_MODIFICATION';
+  comment: string;
+  conditions?: string[];
+  digitalSignatureStamp: string;
+  approvedBy: string;
+  approverDesignation: string;
+  approvedAt: string;
+}
+
+export interface ProactiveCorridorAlert {
+  id: string;
+  corridorName: string;
+  type: 'RECENT_RESTORATION_CONFLICT' | 'COORDINATION_OPPORTUNITY' | 'DIG_ONCE_OPPORTUNITY' | 'MONSOON_EMBARGO_WARNING' | 'SIMHASTHA_MANDATE' | 'HIGH_REWORK_RISK';
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  title: string;
+  description: string;
+  evidence: string[];
+  affectedProjects: Array<{ id: string; name: string; department: string; dates: string }>;
+  suggestedAction: string;
+  createdAt: string;
+}
+
 export interface Project {
   id: string;
   code: string;
@@ -215,6 +339,7 @@ export interface Project {
   emergencyReason?: string;
   contractorId?: string;
   contractorName?: string;
+  proposedContractor?: string;
   status: ProjectStatus;
   documents: ProjectDocument[];
   submittedBy: string;
@@ -222,12 +347,25 @@ export interface Project {
   submittedAt: string;
   clusterId?: string;
   permitId?: string;
+  permitEligibility?: boolean;
   conflictScore?: number;
   conflictSeverity?: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
   progressPercentage: number;
   currentWorkPhase?: string;
   progressLogs?: WorkProgressLog[];
   lastProgressUpdate?: string;
+  aiAnalysisStatus?: AIAnalysisStatus;
+  jointPlanStatus?: JointPlanStatus;
+  aiRecommendation?: AIRecommendationType;
+  responsibleRoadAuthority?: string;
+  responsibleApproverRole?: string;
+  responsibleApproverName?: string;
+  workflowStages?: WorkflowStageRecord[];
+  activePlanVersion?: number;
+  planVersions?: PlanVersion[];
+  preAnalysisCheck?: PreAnalysisCheckResult;
+  technicalReview?: TechnicalReviewSubmission;
+  higherAuthorityApproval?: HigherAuthorityReviewSubmission;
 }
 
 export interface Conflict {
@@ -625,6 +763,12 @@ export interface RoadOpeningPermit {
   issuedBy: string;
   issuedByDesignation: string;
   issuedAt: string;
+  approvedStartDate?: string;
+  approvedEndDate?: string;
+  maxTrenchLengthMeters?: number;
+  maxTrenchWidthMeters?: number;
+  maxTrenchDepthMeters?: number;
+  restorationConditions?: string[];
 }
 
 export interface InspectionPhoto {
@@ -732,12 +876,12 @@ export interface CitizenComplaint {
 
 export interface SystemNotification {
   id: string;
-  targetRole?: UserRole | 'ALL';
+  targetRole?: UserRole | 'ENGINEER' | 'ALL' | string;
   targetDepartment?: DepartmentName | 'ALL';
   targetUserId?: string;
   title: string;
   message: string;
-  type: 'CONFLICT' | 'COORDINATION' | 'APPROVAL' | 'PERMIT' | 'EXTENSION' | 'INSPECTION' | 'EMERGENCY' | 'COMPLAINT';
+  type: 'CONFLICT' | 'COORDINATION' | 'APPROVAL' | 'PERMIT' | 'EXTENSION' | 'INSPECTION' | 'EMERGENCY' | 'COMPLAINT' | 'PROJECT' | string;
   link?: string;
   isRead: boolean;
   timestamp: string;

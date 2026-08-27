@@ -10,6 +10,9 @@ const EARTH_RADIUS_METERS = 6371000;
  * Calculates Great-Circle distance between two coordinates in meters (Haversine)
  */
 export function calculateDistanceMeters(p1: LatLng, p2: LatLng): number {
+  if (!p1 || !p2 || typeof p1.lat !== 'number' || typeof p2.lat !== 'number' || typeof p1.lng !== 'number' || typeof p2.lng !== 'number') {
+    return Infinity;
+  }
   const dLat = ((p2.lat - p1.lat) * Math.PI) / 180;
   const dLng = ((p2.lng - p1.lng) * Math.PI) / 180;
   const lat1 = (p1.lat * Math.PI) / 180;
@@ -29,7 +32,8 @@ export function calculatePolylineLengthMeters(points: LatLng[]): number {
   if (!points || points.length < 2) return 0;
   let total = 0;
   for (let i = 0; i < points.length - 1; i++) {
-    total += calculateDistanceMeters(points[i], points[i + 1]);
+    const d = calculateDistanceMeters(points[i], points[i + 1]);
+    if (d !== Infinity) total += d;
   }
   return total;
 }
@@ -38,6 +42,9 @@ export function calculatePolylineLengthMeters(points: LatLng[]): number {
  * Calculates minimum distance from a point to a line segment in meters
  */
 export function pointToSegmentDistanceMeters(p: LatLng, v: LatLng, w: LatLng): number {
+  if (!p || !v || !w || typeof p.lat !== 'number' || typeof v.lat !== 'number' || typeof w.lat !== 'number') {
+    return Infinity;
+  }
   const l2 = (w.lat - v.lat) ** 2 + (w.lng - v.lng) ** 2;
   if (l2 === 0) return calculateDistanceMeters(p, v);
   
@@ -57,14 +64,16 @@ export function pointToSegmentDistanceMeters(p: LatLng, v: LatLng, w: LatLng): n
  * Minimum distance between a point and a polyline in meters
  */
 export function pointToPolylineDistanceMeters(p: LatLng, polyline: LatLng[]): number {
-  if (!polyline || polyline.length === 0) return Infinity;
+  if (!p || !polyline || polyline.length === 0) return Infinity;
   if (polyline.length === 1) return calculateDistanceMeters(p, polyline[0]);
   
   let minDistance = Infinity;
   for (let i = 0; i < polyline.length - 1; i++) {
-    const dist = pointToSegmentDistanceMeters(p, polyline[i], polyline[i + 1]);
-    if (dist < minDistance) {
-      minDistance = dist;
+    if (polyline[i] && polyline[i + 1]) {
+      const dist = pointToSegmentDistanceMeters(p, polyline[i], polyline[i + 1]);
+      if (dist < minDistance) {
+        minDistance = dist;
+      }
     }
   }
   return minDistance;

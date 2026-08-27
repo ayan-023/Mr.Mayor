@@ -28,6 +28,7 @@ import {
 } from '../src/types/index.js';
 
 import { runAICoordinationEngine } from './coordinationEngine.js';
+import { resolveRoadAuthority } from './nashikIntelligenceData.js';
 
 export function generateOfficialInfrastructureAnalysis(
   project: Project,
@@ -185,15 +186,16 @@ export function generateOfficialInfrastructureAnalysis(
   // Sort department action checklist by geotechnical depth hierarchy
   departmentActionChecklist.sort((a, b) => a.depthHierarchyOrder - b.depthHierarchyOrder);
 
-  // 8. STATUTORY APPROVAL RECOMMENDATION
+  // 8. STATUTORY APPROVAL RECOMMENDATION (RESOLVED FROM ROAD OWNERSHIP)
+  const roadAuthority = resolveRoadAuthority(road.name, road.ownerAgency);
   const approvalRecommendation = {
     statutoryApprovalRecommended: true,
-    recommendedDesignation: 'Municipal Commissioner / Collector (Top Authority)',
-    statutoryActReference: 'Maharashtra Municipal Corporations Act (MMCA 1949), Section 197 & Section 201',
+    recommendedDesignation: roadAuthority.approverDesignation,
+    statutoryActReference: roadAuthority.statutoryAct,
     conditions: [
       'All utility contractors must sign the Joint Trenching Charter prior to site mobilization.',
-      'Work must be restricted to nocturnal hours (22:00 to 06:00) at Canada Corner and Jehan Circle junctions.',
-      'Mandatory joint pre-backfill inspection by NMC Executive Engineers.',
+      'Work must be restricted to nocturnal hours (22:00 to 06:00) at sensitive junction nodes.',
+      `Mandatory joint pre-backfill inspection by ${roadAuthority.agency} Executive Engineers.`,
       'Zero open earth trenches permitted during monsoon rain warnings.',
     ],
   };

@@ -34,6 +34,7 @@ import {
   NASHIK_ROAD_DEPENDENCY_GRAPH,
   NASHIK_ITMS_INFRASTRUCTURE,
   DEFAULT_COORDINATION_WEIGHTS,
+  resolveRoadAuthority,
 } from './nashikIntelligenceData.js';
 import {
   generateOfficialInfrastructureAnalysis,
@@ -367,164 +368,160 @@ apiRouter.post('/projects', async (req: Request, res: Response) => {
   if (!p.code) p.code = `${(p.department || 'PWD').substring(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
   p.submittedAt = new Date().toISOString();
   p.progressPercentage = 0;
-  p.status = 'VALIDATING';
+  
+  // Section 1 & 3: Strictly PROPOSED on submission (NO JOINT DIGGING DECISION BEFORE ANALYSIS)
+  p.status = 'PROPOSED';
+  p.aiAnalysisStatus = 'NOT_ANALYZED';
+  p.jointPlanStatus = 'NOT_PROPOSED';
+  p.activePlanVersion = 1;
 
-  // Run Conflict Engine Automatically
-  const conflictResult = analyzeProjectConflicts(p, db.getProjects(), db.getRoads(), db.getAssets());
-  p.conflictScore = conflictResult.score;
-  p.conflictSeverity = conflictResult.severity;
-  p.status = conflictResult.hasConflict ? 'CONFLICT_DETECTED' : 'PENDING_APPROVAL';
+  // Resolve road authority from road ownership metadata
+  const road = db.getRoadById(p.roadId) || db.getRoads().find(r => r.name === p.roadName) || db.getRoads()[0];
+  const roadAuth = resolveRoadAuthority(p.roadName || road?.name || '', road?.ownerAgency);
+  p.responsibleRoadAuthority = roadAuth.agency;
+  p.responsibleApproverRole = roadAuth.approverRole;
+  p.responsibleApproverName = roadAuth.approverName;
 
-  db.saveProject(p);
-  if (conflictResult.conflicts.length > 0) {
-    db.saveConflicts(conflictResult.conflicts);
-  }
+  // Pre-Analysis Check Dataset Creation (Section 4)
+  const existingActive = db.getProjects().filter(other => other.roadId === p.roadId && other.status === 'IN_PROGRESS');
+  const plannedOnCorridor = db.getProjects().filter(other => other.roadId === p.roadId && other.id !== p.id);
+  const daysSinceResurfaced = road?.daysSinceLastResurfaced || 120;
+  
+  p.preAnalysisCheck = {
+    roadOwnership: roadAuth.agency as any,
+    responsibleRoadAuthorityName: roadAuth.agency,
+    responsibleRoadAuthorityRole: roadAuth.approverRole,
+    responsibleApproverDesignation: roadAuth.approverDesignation,
+    existingActiveProjectsCount: existingActive.length,
+    plannedProjectsCount: plannedOnCorridor.length,
+    recentRestorationsCount: daysSinceResurfaced <= 365 ? 1 : 0,
+    reworkRisk: daysSinceResurfaced <= 90 ? 'CRITICAL' : daysSinceResurfaced <= 180 ? 'HIGH' : 'LOW',
+    isMonsoonEmbargoActive: false,
+    isSimhasthaCorridor: (p.roadName || '').toLowerCase().includes('gangapur') || (p.roadName || '').toLowerCase().includes('trimbak'),
+    trafficSensitivity: road?.trafficClass === 'High' ? 'HIGH' : 'MODERATE',
+    sensitiveJunctions: ['Canada Corner', 'Jehan Circle', 'Shalimar Junction'],
+    earlyWarningAlerts: daysSinceResurfaced <= 180 ? [`Recent restoration (${daysSinceResurfaced} days ago) on ${p.roadName}. Rework risk alert active.`] : [],
+  };
 
-  // Create Approval Workflow Chain dynamically
-  const workflowSteps: ApprovalStep[] = [
+  // Initialize Workflow Stages (Section 61)
+  p.workflowStages = [
     {
-      id: 'STP-1',
-      stepName: 'Technical & GIS Conflict Validation',
-      roleRequired: 'NODAL_OFFICER',
-      departmentRequired: 'Smart City & Urban Planning',
-      status: 'APPROVED',
-      approverName: p.submittedBy,
-      approverDesignation: p.submittedByDesignation,
-      actionDate: new Date().toISOString(),
-      remarks: conflictResult.hasConflict
-        ? `Conflict score: ${conflictResult.score}/100 (${conflictResult.severity}). Stakeholders: ${conflictResult.affectedStakeholders.join(', ')}`
-        : 'Initial geometry and utility clearance passed without critical conflict.',
+      stageId: 'STAGE-01-PROPOSED',
+      stageName: 'Project Proposal Submitted',
+      actorName: p.submittedBy || 'Department Officer',
+      actorRole: 'ENGINEER',
+      actorDepartment: p.department,
+      timestamp: new Date().toISOString(),
+      status: 'COMPLETED',
+      comment: `Project proposal registered for ${p.department} along ${p.roadName}. Responsible Road Authority: ${roadAuth.agency} (${roadAuth.approverName}).`,
+    },
+    {
+      stageId: 'STAGE-02-PRECHECK',
+      stageName: 'Automatic Pre-Analysis Check',
+      actorName: 'MR. MAYOR Intelligent Pre-Check Engine',
+      actorRole: 'SYSTEM',
+      timestamp: new Date().toISOString(),
+      status: 'COMPLETED',
+      comment: `Verified road ownership (${roadAuth.agency}), ${plannedOnCorridor.length} corridor projects, rework risk: ${p.preAnalysisCheck.reworkRisk}.`,
+    },
+    {
+      stageId: 'STAGE-03-AI-ANALYSIS',
+      stageName: 'AI Corridor Lookahead Analysis',
+      actorName: 'AI Infrastructure Coordination Engine',
+      actorRole: 'SYSTEM',
+      timestamp: '',
+      status: 'PENDING',
+      comment: 'Awaiting AI 90-day lookahead corridor multi-project analysis.',
+    },
+    {
+      stageId: 'STAGE-04-TECH-REVIEW',
+      stageName: 'Technical Engineering Review',
+      actorName: roadAuth.approverName,
+      actorRole: roadAuth.approverRole,
+      actorDepartment: roadAuth.agency,
+      timestamp: '',
+      status: 'PENDING',
+      comment: `Assigned to ${roadAuth.approverDesignation}.`,
+    },
+    {
+      stageId: 'STAGE-05-HIGHER-APPROVAL',
+      stageName: 'Higher Authority Review & Sanction',
+      actorName: 'Dr. Pravin Gedam (IAS)',
+      actorRole: 'COMMISSIONER',
+      actorDepartment: 'Smart City & Urban Planning',
+      timestamp: '',
+      status: 'PENDING',
+    },
+    {
+      stageId: 'STAGE-06-PERMIT',
+      stageName: 'Digital Permit Issuance',
+      actorName: 'Nodal Permitting Officer',
+      actorRole: 'NODAL_OFFICER',
+      timestamp: '',
+      status: 'PENDING',
+    },
+    {
+      stageId: 'STAGE-07-EXECUTION',
+      stageName: 'Field Execution',
+      actorName: p.proposedContractor || 'Assigned Contractor',
+      actorRole: 'CONTRACTOR',
+      timestamp: '',
+      status: 'PENDING',
+    },
+    {
+      stageId: 'STAGE-08-INSPECTION',
+      stageName: 'Field QC & Compaction Inspection',
+      actorName: 'Er. Kavita Jadhav',
+      actorRole: 'INSPECTOR',
+      timestamp: '',
+      status: 'PENDING',
+    },
+    {
+      stageId: 'STAGE-09-RESTORATION',
+      stageName: 'Pavement Resurfacing & Restoration',
+      actorName: 'PWD / NMC Road Restoration Division',
+      actorRole: 'EXECUTIVE_ENGINEER',
+      timestamp: '',
+      status: 'PENDING',
+    },
+    {
+      stageId: 'STAGE-10-CLOSURE',
+      stageName: 'Restoration Verification & Pavement Protection',
+      actorName: roadAuth.approverName,
+      actorRole: roadAuth.approverRole,
+      timestamp: '',
+      status: 'PENDING',
     },
   ];
 
-  if (conflictResult.coordinationOpportunity) {
-    workflowSteps.push({
-      id: 'STP-2',
-      stepName: 'Multi-Agency Coordination Agreement',
-      roleRequired: 'DEPT_HEAD',
-      departmentRequired: 'Roads / PWD',
-      status: 'PENDING',
-      remarks: 'Multi-agency excavation consolidation required.',
-    });
-  }
+  db.saveProject(p);
 
-  if (p.trafficImpact === 'High' || p.trafficImpact === 'Severe') {
-    workflowSteps.push({
-      id: 'STP-3',
-      stepName: 'Traffic Police Safety & Diversion Clearance',
-      roleRequired: 'DEPT_HEAD',
-      departmentRequired: 'Traffic Police Authority' as any,
-      status: 'PENDING',
-    });
-  }
-
-  workflowSteps.push({
-    id: 'STP-4',
-    stepName: 'Road-Owning Authority Road Opening Clearance',
-    roleRequired: 'DEPT_HEAD',
-    departmentRequired: 'Roads / PWD',
-    status: 'PENDING',
+  // Notify Responsible Technical Approver
+  db.addNotification({
+    id: `NOTIF-${Date.now()}`,
+    targetRole: roadAuth.approverRole as any,
+    title: `New Project Proposed: ${p.name}`,
+    message: `${p.department} submitted a new excavation proposal on ${p.roadName}. Initial pre-check passed. AI Analysis ready to run.`,
+    type: 'PROJECT',
+    link: `/projects?id=${p.id}`,
+    isRead: false,
+    timestamp: new Date().toISOString(),
   });
 
-  if (p.estimatedCostINR >= db.getSettings().seniorApprovalThresholdINR || p.isEmergency) {
-    workflowSteps.push({
-      id: 'STP-5',
-      stepName: 'Senior Municipal Authority Final Authorization',
-      roleRequired: 'COMMISSIONER',
-      departmentRequired: 'Municipal Authority' as any,
-      status: 'PENDING',
-    });
-  }
-
-  const workflow: ApprovalWorkflow = {
-    id: `WF-${p.id}`,
-    projectId: p.id,
-    projectName: p.name,
-    department: p.department,
-    currentStepIndex: 1,
-    steps: workflowSteps,
-    overallStatus: 'PENDING',
-    updatedAt: new Date().toISOString(),
-  };
-
-  db.saveWorkflow(workflow);
-
-  // If High conflict, auto-propose or link coordination cluster
-  if (conflictResult.coordinationOpportunity) {
-    const road = db.getRoadById(p.roadId) || db.getRoads()[0];
-    const relatedProjects = [
-      p,
-      ...db.getProjects().filter((other) => other.roadId === p.roadId && other.id !== p.id).slice(0, 2),
-    ];
-
-    const aiPlan = await generateAICoordinationPlan(road, relatedProjects, db.getAssets());
-
-    const clusterId = `CR-2026-${Math.floor(100 + Math.random() * 900)}`;
-    const cluster: any = {
-      id: clusterId,
-      clusterCode: clusterId,
-      name: `${p.roadName} Coordinated Infrastructure Cluster`,
-      roadId: p.roadId,
-      roadName: p.roadName,
-      projectIds: relatedProjects.map((rp) => rp.id),
-      projects: relatedProjects,
-      recommendedWindowStart: aiPlan.recommendedWindow.start,
-      recommendedWindowEnd: aiPlan.recommendedWindow.end,
-      recommendedSequence: aiPlan.recommendedSequence,
-      excavationsAvoided: aiPlan.estimatedExcavationsAvoided,
-      restorationsAvoided: aiPlan.estimatedRestorationsAvoided,
-      estimatedCostSavedINR: aiPlan.estimatedCostSavedINR,
-      trafficDisruptionReductionPct: aiPlan.trafficDisruptionReductionPct,
-      aiConfidence: aiPlan.confidence,
-      aiReasoning: aiPlan.reasoning,
-      status: 'PROPOSED',
-      departmentApprovals: {
-        [p.department]: {
-          approved: true,
-          officer: p.submittedBy,
-          designation: p.submittedByDesignation,
-          timestamp: new Date().toISOString(),
-          notes: 'Department submits project for coordinated execution.',
-        },
-      },
-      createdAt: new Date().toISOString(),
-    };
-
-    db.saveCluster(cluster);
-    p.clusterId = cluster.id;
-    db.saveProject(p);
-
-    db.addNotification({
-      id: `NOTIF-${Date.now()}`,
-      targetRole: 'ALL',
-      title: 'New Coordination Cluster Generated',
-      message: `${p.name} on ${p.roadName} conflicts with existing projects. AI has generated joint schedule cluster ${cluster.clusterCode}.`,
-      type: 'COORDINATION',
-      link: '/coordination',
-      isRead: false,
-      timestamp: new Date().toISOString(),
-    });
-  }
-
   db.logAudit({
-    userId: p.submittedBy,
-    userName: p.submittedBy,
+    userId: p.submittedBy || 'Authorized Officer',
+    userName: p.submittedBy || 'Authorized Officer',
     role: 'ENGINEER',
     department: p.department,
     action: 'PROJECT_SUBMITTED',
     entity: 'Project',
     entityId: p.id,
     ipAddress: req.ip || '127.0.0.1',
-    newValue: `Project ${p.code}: ${p.name} (Budget: ₹${p.estimatedCostINR})`,
+    newValue: `Project ${p.code}: ${p.name} proposed on ${p.roadName}. Status: PROPOSED.`,
     reason: p.description,
   });
 
-  res.json({
-    success: true,
-    project: p,
-    conflictAnalysis: conflictResult,
-    workflow,
-  });
+  res.status(201).json({ success: true, project: p });
 });
 
 // ==========================================
@@ -1873,4 +1870,455 @@ apiRouter.post('/emergency/request', async (req: Request, res: Response) => {
   });
 
   res.json({ success: true, project: emergencyProject, permit });
+});
+
+// ==========================================
+// 4B. COMPREHENSIVE DECISION & APPROVAL WORKFLOW ENDPOINTS
+// ==========================================
+
+// 1. TRIGGER AI CORRIDOR ANALYSIS
+apiRouter.post('/projects/:id/analyze', (req: Request, res: Response) => {
+  const project = db.getProjectById(req.params.id);
+  if (!project) return res.status(404).json({ error: 'Project not found' });
+
+  const allProjects = db.getProjects();
+  const roads = db.getRoads();
+  const assets = db.getAssets();
+
+  const analysisReport = generateOfficialInfrastructureAnalysis(project, allProjects, roads, assets);
+  const coordResult = runAICoordinationEngine(project, allProjects, roads, assets, 100);
+
+  project.status = 'ANALYSIS_READY';
+  project.aiAnalysisStatus = 'ANALYSIS_READY';
+  project.jointPlanStatus = coordResult.relatedProjects.length > 0 ? 'AI_RECOMMENDED' : 'NOT_PROPOSED';
+  project.aiRecommendation = coordResult.relatedProjects.length > 0 ? 'COORDINATE_JOINT_DIG' : 'PROCEED_SEPARATELY';
+  
+  // Create Plan Version 1
+  project.planVersions = [
+    {
+      planId: `PLAN-${project.code}-V1`,
+      version: 1,
+      author: 'MR. MAYOR AI Coordination Engine',
+      authorRole: 'SYSTEM',
+      authorDepartment: 'Smart City & Urban Planning',
+      status: project.jointPlanStatus,
+      modificationSummary: `Initial AI multi-project corridor lookahead plan (${coordResult.relatedProjects.length + 1} projects analyzed).`,
+      timestamp: new Date().toISOString(),
+      selectedPlanId: 'PLAN_A',
+      candidatePlans: coordResult.candidatePlans,
+      recalculatedSavingsINR: coordResult.impactSummary.estimatedCostSavedINR,
+    }
+  ];
+
+  // Update Workflow Stage 3 (AI Analysis)
+  if (project.workflowStages) {
+    const stg3 = project.workflowStages.find(s => s.stageId === 'STAGE-03-AI-ANALYSIS');
+    if (stg3) {
+      stg3.status = 'COMPLETED';
+      stg3.timestamp = new Date().toISOString();
+      stg3.comment = `AI analyzed corridor ${project.roadName}. Identified ${coordResult.relatedProjects.length} related projects. Recommendation: ${project.aiRecommendation}.`;
+    }
+    const stg4 = project.workflowStages.find(s => s.stageId === 'STAGE-04-TECH-REVIEW');
+    if (stg4) stg4.status = 'IN_PROGRESS';
+  }
+
+  db.saveProject(project);
+
+  // Notify Technical Authority
+  const roadAuth = resolveRoadAuthority(project.roadName, undefined);
+  db.addNotification({
+    id: `NOTIF-${Date.now()}`,
+    targetRole: roadAuth.approverRole as any,
+    title: `AI Analysis Ready: ${project.name}`,
+    message: `AI has generated a coordination plan for ${project.name} on ${project.roadName}. Technical Engineering Review required.`,
+    type: 'COORDINATION',
+    link: `/approvals?id=${project.id}`,
+    isRead: false,
+    timestamp: new Date().toISOString(),
+  });
+
+  db.logAudit({
+    userId: 'SYSTEM_AI',
+    userName: 'MR. MAYOR AI Engine',
+    role: 'SYSTEM' as any,
+    department: 'Smart City & Urban Planning',
+    action: 'AI_ANALYSIS_COMPLETED',
+    entity: 'Project',
+    entityId: project.id,
+    ipAddress: req.ip || '127.0.0.1',
+    newValue: `AI Analysis completed for ${project.code}. Recommendation: ${project.aiRecommendation}. Plan Version: v1.`,
+  });
+
+  res.json({
+    success: true,
+    project,
+    analysisReport,
+    coordinationResult: coordResult,
+  });
+});
+
+// 2. SUBMIT TECHNICAL ENGINEERING REVIEW (FIRST APPROVER)
+apiRouter.post('/projects/:id/technical-review', (req: Request, res: Response) => {
+  const project = db.getProjectById(req.params.id);
+  if (!project) return res.status(404).json({ error: 'Project not found' });
+
+  const { decision, comment, conditions, selectedPlanId, reviewerName, reviewerRole, reviewerDepartment, modificationsRequested } = req.body;
+
+  project.technicalReview = {
+    projectId: project.id,
+    decision,
+    comment: comment || 'Technical engineering specifications, depth hierarchy, and compaction standards verified.',
+    conditions: conditions || ['Work must follow nocturnal excavation window (22:00-06:00)', 'Mandatory joint pre-backfill laser test'],
+    modificationsRequested,
+    selectedPlanId: selectedPlanId || 'PLAN_A',
+    reviewedBy: reviewerName || project.responsibleApproverName || 'Er. Sanjay Patil',
+    reviewerDesignation: reviewerRole || 'Executive Engineer',
+    reviewerDepartment: reviewerDepartment || project.responsibleRoadAuthority || 'Roads / PWD',
+    reviewedAt: new Date().toISOString(),
+  };
+
+  if (decision === 'APPROVE' || decision === 'FORWARD_HIGHER') {
+    project.status = 'TECHNICAL_APPROVED';
+    project.jointPlanStatus = 'TECHNICALLY_APPROVED';
+    
+    // Update Workflow Stages
+    if (project.workflowStages) {
+      const stg4 = project.workflowStages.find(s => s.stageId === 'STAGE-04-TECH-REVIEW');
+      if (stg4) {
+        stg4.status = 'COMPLETED';
+        stg4.timestamp = new Date().toISOString();
+        stg4.actorName = project.technicalReview.reviewedBy;
+        stg4.comment = project.technicalReview.comment;
+        stg4.conditions = project.technicalReview.conditions;
+      }
+      const stg5 = project.workflowStages.find(s => s.stageId === 'STAGE-05-HIGHER-APPROVAL');
+      if (stg5) stg5.status = 'IN_PROGRESS';
+    }
+
+    // Immediately notify Higher Authority (Commissioner / Additional Commissioner)
+    db.addNotification({
+      id: `NOTIF-${Date.now()}`,
+      targetRole: 'COMMISSIONER',
+      title: `Technical Approval Completed: ${project.name}`,
+      message: `${project.technicalReview.reviewedBy} (${project.technicalReview.reviewerDepartment}) has approved the proposed coordination plan on ${project.roadName}. Higher Authority final sanction required.`,
+      type: 'APPROVAL',
+      link: `/approvals?id=${project.id}`,
+      isRead: false,
+      timestamp: new Date().toISOString(),
+    });
+  } else if (decision === 'REQUEST_MODIFICATION') {
+    project.status = 'MODIFICATION_REQUESTED';
+    project.jointPlanStatus = 'MODIFIED';
+
+    if (project.workflowStages) {
+      const stg4 = project.workflowStages.find(s => s.stageId === 'STAGE-04-TECH-REVIEW');
+      if (stg4) {
+        stg4.status = 'REJECTED';
+        stg4.comment = `Modification requested: ${modificationsRequested || comment}`;
+      }
+    }
+
+    db.addNotification({
+      id: `NOTIF-${Date.now()}`,
+      targetRole: 'ENGINEER',
+      title: `Modification Requested: ${project.name}`,
+      message: `Technical Authority requested plan modifications for ${project.name}: ${modificationsRequested || comment}`,
+      type: 'PROJECT',
+      link: `/projects?id=${project.id}`,
+      isRead: false,
+      timestamp: new Date().toISOString(),
+    });
+  } else {
+    project.status = 'REJECTED';
+    project.jointPlanStatus = 'REJECTED';
+  }
+
+  db.saveProject(project);
+
+  db.logAudit({
+    userId: project.technicalReview.reviewedBy,
+    userName: project.technicalReview.reviewedBy,
+    role: project.technicalReview.reviewerDesignation as any,
+    department: project.technicalReview.reviewerDepartment,
+    action: `TECHNICAL_REVIEW_${decision}`,
+    entity: 'Project',
+    entityId: project.id,
+    ipAddress: req.ip || '127.0.0.1',
+    newValue: `Technical Authority decision: ${decision} by ${project.technicalReview.reviewedBy}. Comment: ${comment}`,
+  });
+
+  res.json({ success: true, project });
+});
+
+// 3. SUBMIT HIGHER AUTHORITY REVIEW & SANCTION
+apiRouter.post('/projects/:id/higher-approval', (req: Request, res: Response) => {
+  const project = db.getProjectById(req.params.id);
+  if (!project) return res.status(404).json({ error: 'Project not found' });
+
+  const { decision, comment, conditions, approverName, approverDesignation } = req.body;
+
+  const stamp = `GOVT-MAHA-NMC-AUTH-${Date.now().toString(36).toUpperCase()}-DIGITAL-SIGN`;
+
+  project.higherAuthorityApproval = {
+    projectId: project.id,
+    decision,
+    comment: comment || 'Sanctioned under Section 197 & 198 of the MMC Act 1949 with mandatory Dig-Once single road-opening enforcement.',
+    conditions: conditions || [
+      'Strict adherence to depth hierarchy (Drainage -> Water -> Telecom)',
+      'Single unified Bituminous Concrete restoration with 3-year moratorium',
+      'Nocturnal execution at sensitive junction nodes'
+    ],
+    digitalSignatureStamp: stamp,
+    approvedBy: approverName || 'Dr. Pravin Gedam (IAS)',
+    approverDesignation: approverDesignation || 'Municipal Commissioner & CEO',
+    approvedAt: new Date().toISOString(),
+  };
+
+  if (decision === 'APPROVE') {
+    project.status = 'APPROVED';
+    project.jointPlanStatus = 'APPROVED';
+    
+    // Update Workflow Stages
+    if (project.workflowStages) {
+      const stg5 = project.workflowStages.find(s => s.stageId === 'STAGE-05-HIGHER-APPROVAL');
+      if (stg5) {
+        stg5.status = 'COMPLETED';
+        stg5.timestamp = new Date().toISOString();
+        stg5.actorName = project.higherAuthorityApproval.approvedBy;
+        stg5.comment = project.higherAuthorityApproval.comment;
+        stg5.conditions = project.higherAuthorityApproval.conditions;
+      }
+      const stg6 = project.workflowStages.find(s => s.stageId === 'STAGE-06-PERMIT');
+      if (stg6) stg6.status = 'IN_PROGRESS';
+    }
+
+    // Notify Nodal Officer, Contractor, and Department Engineers
+    db.addNotification({
+      id: `NOTIF-${Date.now()}`,
+      targetRole: 'ALL',
+      title: `Project Officially Sanctioned: ${project.name}`,
+      message: `${project.name} on ${project.roadName} has received statutory approval from ${project.higherAuthorityApproval.approvedBy}. Digital Permit can now be generated.`,
+      type: 'APPROVAL',
+      link: `/permits?projectId=${project.id}`,
+      isRead: false,
+      timestamp: new Date().toISOString(),
+    });
+  } else {
+    project.status = 'REJECTED';
+    project.jointPlanStatus = 'REJECTED';
+  }
+
+  db.saveProject(project);
+
+  db.logAudit({
+    userId: project.higherAuthorityApproval.approvedBy,
+    userName: project.higherAuthorityApproval.approvedBy,
+    role: 'COMMISSIONER',
+    department: 'Smart City & Urban Planning',
+    action: `HIGHER_AUTHORITY_${decision}`,
+    entity: 'Project',
+    entityId: project.id,
+    ipAddress: req.ip || '127.0.0.1',
+    newValue: `Statutory Sanction granted for ${project.code} by ${project.higherAuthorityApproval.approvedBy}. Digital Stamp: ${stamp}`,
+  });
+
+  res.json({ success: true, project });
+});
+
+// 4. MODIFY PLAN (CREATE PLAN VERSION 2)
+apiRouter.post('/projects/:id/modify-plan', (req: Request, res: Response) => {
+  const project = db.getProjectById(req.params.id);
+  if (!project) return res.status(404).json({ error: 'Project not found' });
+
+  const { modificationsSummary, selectedPlanId, authorName, authorRole, conditions } = req.body;
+
+  const currentVersion = project.activePlanVersion || 1;
+  const newVersionNum = currentVersion + 1;
+
+  const newPlanVersion: any = {
+    planId: `PLAN-${project.code}-V${newVersionNum}`,
+    version: newVersionNum,
+    author: authorName || 'Er. Rajesh Kulkarni (Nodal Officer)',
+    authorRole: authorRole || 'NODAL_OFFICER',
+    authorDepartment: 'Smart City & Urban Planning',
+    status: 'MODIFIED',
+    modificationSummary: modificationsSummary || `Authority modification applied: Adjusted execution sequencing and department windows.`,
+    timestamp: new Date().toISOString(),
+    selectedPlanId: selectedPlanId || 'PLAN_B',
+    candidatePlans: project.planVersions?.[0]?.candidatePlans || [],
+    recalculatedSavingsINR: Math.round((project.estimatedCostINR || 2000000) * 0.45),
+    conditions: conditions || ['Staggered micro-windows enforced'],
+  };
+
+  if (!project.planVersions) project.planVersions = [];
+  project.planVersions.unshift(newPlanVersion);
+  project.activePlanVersion = newVersionNum;
+  project.jointPlanStatus = 'MODIFIED';
+  project.status = 'UNDER_TECHNICAL_REVIEW';
+
+  db.saveProject(project);
+
+  db.logAudit({
+    userId: authorName || 'Authorized Officer',
+    userName: authorName || 'Authorized Officer',
+    role: authorRole || 'NODAL_OFFICER',
+    department: 'Smart City & Urban Planning',
+    action: 'PLAN_VERSION_MODIFIED',
+    entity: 'Project',
+    entityId: project.id,
+    ipAddress: req.ip || '127.0.0.1',
+    newValue: `Plan v${newVersionNum} created for ${project.code}. ${newPlanVersion.modificationSummary}`,
+  });
+
+  res.json({ success: true, project, newPlanVersion });
+});
+
+// 5. ISSUE DIGITAL ROAD OPENING PERMIT WITH QR CODE
+apiRouter.post('/projects/:id/permit/issue', async (req: Request, res: Response) => {
+  const project = db.getProjectById(req.params.id);
+  if (!project) return res.status(404).json({ error: 'Project not found' });
+
+  const permitNumber = `PERMIT-NSK-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+  const appBaseUrl = process.env.APP_URL || 'http://localhost:3000';
+  const qrVerificationUrl = `${appBaseUrl}/verify-permit?number=${permitNumber}&project=${project.code}`;
+  const qrCodeDataUrl = await QRCode.toDataURL(qrVerificationUrl);
+
+  const permit: RoadOpeningPermit = {
+    id: `PRM-${Date.now()}`,
+    permitNumber,
+    projectId: project.id,
+    projectName: project.name,
+    department: project.department,
+    roadId: project.roadId,
+    roadName: project.roadName,
+    contractorName: project.proposedContractor || 'Approved Municipal Contractor',
+    contractorContact: '+91 98230 11223',
+    approvedGeometry: project.geometry || [],
+    validFrom: project.requiredStartDate,
+    validTo: project.requiredCompletionDate,
+    approvedStartDate: project.requiredStartDate,
+    approvedEndDate: project.requiredCompletionDate,
+    excavationDimensions: {
+      lengthMeters: project.lengthMeters || 1200,
+      widthMeters: project.excavationWidthMeters || 1.2,
+      depthMeters: project.excavationDepthMeters || 1.8,
+      totalAreaSqM: (project.lengthMeters || 1200) * (project.excavationWidthMeters || 1.2),
+    },
+    maxTrenchLengthMeters: project.lengthMeters || 1200,
+    maxTrenchWidthMeters: project.excavationWidthMeters || 1.2,
+    maxTrenchDepthMeters: project.excavationDepthMeters || 1.8,
+    status: 'ACTIVE',
+    qrCodeDataUrl,
+    issuedAt: new Date().toISOString(),
+    issuedBy: 'Dr. Pravin Gedam (IAS)',
+    issuedByDesignation: 'Municipal Commissioner & CEO',
+    restorationDeadline: project.requiredCompletionDate,
+    securityDepositINR: Math.round((project.estimatedCostINR || 2000000) * 0.15),
+    safetyGuidelines: [
+      'Hard barricading with retro-reflective tape mandatory',
+      'Gas and underground utility sensor sweeps before mechanical digging',
+      'Laser grade compaction check before asphalt sealing'
+    ],
+    trafficConditions: [
+      'Work restricted to nocturnal hours (22:00 to 06:00)',
+      'Retro-reflective hard barricades with solar flashing blinkers mandatory',
+      'Dedicated traffic marshals at Canada Corner & Jehan Circle'
+    ],
+    restorationConditions: [
+      '95%+ Proctor Density compaction test before bituminous paving',
+      'Unified 40mm DBM + 30mm BC full-width asphalt seal',
+      '3-Year pavement protection moratorium upon verification'
+    ],
+  };
+
+  db.savePermit(permit);
+  project.permitId = permit.id;
+  project.status = 'PERMIT_ISSUED';
+
+  if (project.workflowStages) {
+    const stg6 = project.workflowStages.find(s => s.stageId === 'STAGE-06-PERMIT');
+    if (stg6) {
+      stg6.status = 'COMPLETED';
+      stg6.timestamp = new Date().toISOString();
+      stg6.comment = `Digital QR Permit ${permitNumber} issued.`;
+    }
+    const stg7 = project.workflowStages.find(s => s.stageId === 'STAGE-07-EXECUTION');
+    if (stg7) stg7.status = 'IN_PROGRESS';
+  }
+
+  db.saveProject(project);
+
+  db.addNotification({
+    id: `NOTIF-${Date.now()}`,
+    targetRole: 'CONTRACTOR',
+    title: `Digital Permit Issued: ${permitNumber}`,
+    message: `Road opening permit for ${project.name} on ${project.roadName} has been generated with verified QR code.`,
+    type: 'PERMIT',
+    link: `/permits?id=${permit.id}`,
+    isRead: false,
+    timestamp: new Date().toISOString(),
+  });
+
+  res.json({ success: true, permit, project });
+});
+
+// 6. PROACTIVE AI ROAD INTELLIGENCE & CORRIDOR ALERTS (SECTION 26-31)
+apiRouter.get('/coordination/proactive-alerts', (req: Request, res: Response) => {
+  const roads = db.getRoads();
+  const projects = db.getProjects();
+  const alerts: any[] = [];
+
+  roads.forEach((road) => {
+    const corridorProjects = projects.filter(
+      (p) => p.roadId === road.id || p.roadName.toLowerCase().includes(road.name.toLowerCase())
+    );
+
+    // 1. Recent Restoration Moratorium Alert (Section 31)
+    if (road.daysSinceLastResurfaced && road.daysSinceLastResurfaced <= 180) {
+      const activeOrProposed = corridorProjects.filter(p => p.status === 'PROPOSED' || p.status === 'IN_PROGRESS');
+      if (activeOrProposed.length > 0) {
+        alerts.push({
+          id: `ALERT-RESTORE-${road.id}`,
+          corridorName: road.name,
+          type: 'RECENT_RESTORATION_CONFLICT',
+          severity: road.daysSinceLastResurfaced <= 90 ? 'CRITICAL' : 'HIGH',
+          title: `Recent Restoration Moratorium Conflict on ${road.name}`,
+          description: `Road was resurfaced ${road.daysSinceLastResurfaced} days ago. ${activeOrProposed.length} new excavation(s) proposed. High rework risk under ₹135 Cr NMC Restoration Policy.`,
+          evidence: [
+            `Pavement age: ${road.daysSinceLastResurfaced} days (Moratorium active)`,
+            `Affected projects: ${activeOrProposed.map(p => p.code).join(', ')}`,
+            `Traffic Class: ${road.trafficClass}`,
+          ],
+          affectedProjects: activeOrProposed.map(p => ({ id: p.id, name: p.name, department: p.department, dates: `${p.requiredStartDate} to ${p.requiredCompletionDate}` })),
+          suggestedAction: 'Mandate Trenchless Micro-Tunneling (HDD) or require Municipal Commissioner special exception review.',
+          createdAt: new Date().toISOString(),
+        });
+      }
+    }
+
+    // 2. Dig-Once 3+ Project Coordination Opportunity (Section 28-29)
+    if (corridorProjects.length >= 2) {
+      const activeAndProposed = corridorProjects.filter(p => p.status === 'PROPOSED' || p.status === 'ANALYSIS_READY' || p.status === 'UNDER_TECHNICAL_REVIEW');
+      if (activeAndProposed.length >= 2) {
+        alerts.push({
+          id: `ALERT-DIGONCE-${road.id}`,
+          corridorName: road.name,
+          type: 'DIG_ONCE_OPPORTUNITY',
+          severity: 'HIGH',
+          title: `Dig-Once Multi-Agency Opportunity on ${road.name}`,
+          description: `${activeAndProposed.length} department excavations detected on ${road.name} within the 90-day lookahead window. Consolidate into ONE coordinated road opening before restoration.`,
+          evidence: [
+            `Departments involved: ${Array.from(new Set(activeAndProposed.map(p => p.department))).join(', ')}`,
+            `Projects: ${activeAndProposed.map(p => p.name).join(' | ')}`,
+            `Estimated avoidance: ${activeAndProposed.length - 1} duplicate road cuttings`,
+          ],
+          affectedProjects: activeAndProposed.map(p => ({ id: p.id, name: p.name, department: p.department, dates: `${p.requiredStartDate} to ${p.requiredCompletionDate}` })),
+          suggestedAction: 'Open AI Infrastructure Analysis Center and propose single joint digging window.',
+          createdAt: new Date().toISOString(),
+        });
+      }
+    }
+  });
+
+  res.json({ alerts, totalAlerts: alerts.length });
 });

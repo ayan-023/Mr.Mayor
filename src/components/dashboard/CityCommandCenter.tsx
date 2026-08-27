@@ -56,6 +56,20 @@ export const CityCommandCenter: React.FC<CityCommandCenterProps> = ({
 }) => {
   const { currentUser } = useAuth();
   const [actingComplaintId, setActingComplaintId] = useState<string | null>(null);
+  const [proactiveAlerts, setProactiveAlerts] = useState<any[]>([]);
+
+  React.useEffect(() => {
+    async function fetchAlerts() {
+      try {
+        const res = await fetch('/api/coordination/proactive-alerts');
+        const data = await res.json();
+        if (data.alerts) setProactiveAlerts(data.alerts);
+      } catch (err) {
+        console.error('Failed to fetch proactive corridor alerts', err);
+      }
+    }
+    fetchAlerts();
+  }, []);
 
   const canAccessAIAnalysis =
     currentUser &&
@@ -148,7 +162,46 @@ export const CityCommandCenter: React.FC<CityCommandCenterProps> = ({
         </div>
       </div>
 
-      {/* 4 Hero KPI Cards with Truthful Visual Labels */}
+
+      {/* Proactive AI Road Intelligence & Early Warning Alert Banner */}
+      {proactiveAlerts.length > 0 && (
+        <div className="space-y-3">
+          {proactiveAlerts.map((alert) => (
+            <div
+              key={alert.id}
+              className="p-5 rounded-2xl bg-amber-50/80 border border-amber-300 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in"
+            >
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 rounded-xl bg-amber-200 text-amber-900 shrink-0 mt-0.5">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-200 text-amber-950 font-mono">
+                      {alert.type.replace(/_/g, ' ')}
+                    </span>
+                    <span className="text-xs font-bold text-slate-900">{alert.corridorName}</span>
+                  </div>
+                  <h4 className="text-sm font-bold text-amber-950">{alert.title}</h4>
+                  <p className="text-xs text-slate-700 leading-relaxed max-w-2xl">{alert.description}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0 self-start md:self-auto">
+                <button
+                  onClick={() => onNavigate('approvals')}
+                  className="px-4 py-2 bg-amber-900 hover:bg-amber-950 text-white rounded-xl text-xs font-bold transition-colors shadow-xs flex items-center gap-1.5"
+                >
+                  <span>Review Decision Queue</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 4 Hero KPI Cards with Truthful Visual Labels */} 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Cost Saved */}
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col justify-between">

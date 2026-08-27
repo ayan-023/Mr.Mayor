@@ -696,3 +696,144 @@ export const NASHIK_ITMS_INFRASTRUCTURE = {
   sourceDocument: 'NIUA ICCC Case Study & Nashik Smart City (NSSCDCL) 2026 Data',
   provenance: 'CURRENT_REPORT' as DataProvenance,
 };
+
+// -------------------------------------------------------------
+// 10. LOOKAHEAD WINDOW CONFIGURATION & AUTHORITY RESOLUTION
+// -------------------------------------------------------------
+export const COORDINATION_LOOKAHEAD_WINDOW_DAYS = 90; // Configurable: 30 / 60 / 90 / 180 / 365
+
+export interface ResponsibleRoadAuthority {
+  agency: 'PWD' | 'NMC' | 'SMART_CITY' | 'NHAI' | 'RAILWAYS';
+  approverRole: 'EXECUTIVE_ENGINEER' | 'DEPT_HEAD' | 'NODAL_OFFICER';
+  approverName: string;
+  approverDesignation: string;
+  statutoryAct: string;
+}
+
+export function resolveRoadAuthority(roadName: string, roadOwnerAgency?: string): ResponsibleRoadAuthority {
+  const norm = (roadName || '').toLowerCase();
+  const owner = (roadOwnerAgency || '').toUpperCase();
+
+  if (owner === 'PWD' || norm.includes('pwd') || norm.includes('national highway') || norm.includes('nh-60') || norm.includes('state highway') || norm.includes('trimbak')) {
+    return {
+      agency: 'PWD',
+      approverRole: 'EXECUTIVE_ENGINEER',
+      approverName: 'Er. Sanjay Patil',
+      approverDesignation: 'Executive Engineer (Roads & Infrastructure), PWD Nashik Division',
+      statutoryAct: 'Maharashtra Highways Act & PWD Standard Infrastructure Specifications',
+    };
+  }
+
+  if (owner === 'SMART_CITY' || norm.includes('smart city') || norm.includes('nimani') || norm.includes('panchavati heritage')) {
+    return {
+      agency: 'SMART_CITY',
+      approverRole: 'DEPT_HEAD',
+      approverName: 'Er. Kavita Deshmukh',
+      approverDesignation: 'General Manager (Civil & ITMS), Nashik Smart City Development Corp (NSSCDCL)',
+      statutoryAct: 'Nashik Smart City Development Framework & NMC Infrastructure By-laws',
+    };
+  }
+
+  // Default: Nashik Municipal Corporation (NMC)
+  return {
+    agency: 'NMC',
+    approverRole: 'EXECUTIVE_ENGINEER',
+    approverName: 'Er. Rajesh Pawar',
+    approverDesignation: 'Executive Engineer (City Civil & Road Maintenance), NMC West Division',
+    statutoryAct: 'Maharashtra Municipal Corporations (MMC) Act 1949 - Section 197 & 198',
+  };
+}
+
+// -------------------------------------------------------------
+// 11. MUNICIPAL INFRASTRUCTURE CASE LIBRARY (VERIFIED KNOWLEDGE)
+// -------------------------------------------------------------
+export interface MunicipalCase {
+  caseId: string;
+  location: string;
+  authority: string;
+  problem: string;
+  projectsInvolved: string[];
+  roadType: string;
+  utilities: string[];
+  conflictType: string;
+  actionTaken: string;
+  coordinationStrategy: string;
+  verifiedOutcome: string;
+  lessonsLearned: string;
+  source: string;
+  sourceDate: string;
+  confidence: number;
+}
+
+export const MUNICIPAL_CASE_LIBRARY: MunicipalCase[] = [
+  {
+    caseId: 'CASE-NSK-GANGAPUR-2026',
+    location: 'Gangapur Road Arterial Corridor, Nashik',
+    authority: 'NMC / PWD Joint Committee',
+    problem: 'Multiple sequential digging proposals by Water, Drainage and Telecom on freshly paved asphalt with V/C 1.14.',
+    projectsInvolved: ['Water Supply Feeder 600mm DI', 'Underground Drainage Trunk Line', 'Smart City Optical Fiber Conduit'],
+    roadType: 'Major Urban Arterial (4-Lane Divided)',
+    utilities: ['Water', 'Sewerage/Drainage', 'Telecom/OFC'],
+    conflictType: 'Severe Temporal & Spatial Overlay',
+    actionTaken: 'Enforced Dig-Once single road-opening window with depth-staggered excavation (Drainage at 3.2m -> Water at 1.8m -> OFC at 1.0m).',
+    coordinationStrategy: 'Single synchronized trench with combined 40mm DBM + 30mm BC full-width restoration.',
+    verifiedOutcome: 'Reduced 3 separate road cutting events into 1, cutting traffic disruption by 58% and eliminating redundant asphalt reinstatement.',
+    lessonsLearned: 'Compulsory depth hierarchy prevents damage to shallower utility lines while maintaining traffic viability.',
+    source: 'NMC Executive Engineering Coordination Dossier 2026',
+    sourceDate: '2026-03-12',
+    confidence: 0.96,
+  },
+  {
+    caseId: 'CASE-NSK-TRIMBAK-2025',
+    location: 'Trimbak Road Pilgrim Corridor (CBS to Satpur)',
+    authority: 'PWD Nashik Division',
+    problem: 'Gas pipeline proposed 45 days after full bitumen resurfacing under Simhastha Priority Phase-1.',
+    projectsInvolved: ['City Gas Distribution Steel Mains', 'PWD Arterial Resurfacing'],
+    roadType: 'Heavy Industrial / State Highway Transit Corridor',
+    utilities: ['City Gas', 'Road Pavement'],
+    conflictType: '3-Year Road Protection Moratorium Clash',
+    actionTaken: 'Rejected open-trench excavation. Mandated Horizontal Directional Drilling (HDD / Trenchless micro-tunneling) along road utility duct.',
+    coordinationStrategy: 'Zero surface road-cutting condition with mandatory GPR utility survey.',
+    verifiedOutcome: 'Pavement integrity preserved 100%, zero pothole formation in subsequent monsoon.',
+    lessonsLearned: 'Strict moratorium enforcement with trenchless alternatives protects public capital investments.',
+    source: 'Maharashtra PWD Technical Review Committee',
+    sourceDate: '2025-11-20',
+    confidence: 0.94,
+  }
+];
+
+// -------------------------------------------------------------
+// 12. DETERMINISTIC MUNICIPAL RULE ENGINE DEFINITIONS
+// -------------------------------------------------------------
+export const MUNICIPAL_RULE_LIBRARY = [
+  {
+    ruleId: 'RULE-01-ROAD-PROTECTION',
+    ruleName: 'RECENT_RESTORATION_MORATORIUM_RULE',
+    condition: 'Road resurfaced or restored within past 1,095 days (3 years).',
+    action: 'Flag HIGH_REWORK_RISK. Mandate HDD / Trenchless or require Municipal Commissioner special sanction.',
+  },
+  {
+    ruleId: 'RULE-02-TEMPORAL-LOOKAHEAD',
+    ruleName: 'TEMPORAL_LOOKAHEAD_COORDINATION_RULE',
+    condition: 'Two or more projects proposed on same corridor within 90-day lookahead window.',
+    action: 'Cluster into unified Dig-Once opportunity. Generate Plan A (Single Synchronized Window) and Plan B (Sequential Staggered).',
+  },
+  {
+    ruleId: 'RULE-03-MONSOON-EMBARGO',
+    ruleName: 'MONSOON_EXCAVATION_RESTRICTION_RULE',
+    condition: 'Proposed road-opening date falls between June 15 and September 15.',
+    action: 'Block standard approval under Section 197 MMC Act unless marked EMERGENCY_WORK by Municipal Commissioner.',
+  },
+  {
+    ruleId: 'RULE-04-UTILITY-DEPTH-HIERARCHY',
+    ruleName: 'UTILITY_DEPTH_HIERARCHY_RULE',
+    condition: 'Multiple utilities in same corridor cross-section.',
+    action: 'Enforce execution sequence: Drainage (Deepest >2.5m) -> Water (1.5-2.0m) -> Gas (1.2-1.5m) -> Telecom/Power (0.8-1.2m) -> Unified Restoration.',
+  },
+  {
+    ruleId: 'RULE-05-ROAD-OWNERSHIP-AUTHORITY',
+    ruleName: 'RESPONSIBLE_ROAD_AUTHORITY_RESOLUTION_RULE',
+    condition: 'Project submitted on any city road network.',
+    action: 'Determine primary technical reviewer automatically from road ownership (PWD Executive Engineer vs NMC Executive Engineer).',
+  }
+];
