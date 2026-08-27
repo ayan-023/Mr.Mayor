@@ -2322,3 +2322,99 @@ apiRouter.get('/coordination/proactive-alerts', (req: Request, res: Response) =>
 
   res.json({ alerts, totalAlerts: alerts.length });
 });
+
+// 7. INFRASTRUCTURE ANALYSIS CENTER & OFFICIAL REPORT ROUTES (SECTIONS 46-68)
+apiRouter.get('/analysis/:projectId', (req: Request, res: Response) => {
+  const project = db.getProjectById(req.params.projectId);
+  if (!project) return res.status(404).json({ error: 'Project not found' });
+
+  const allProjects = db.getProjects();
+  const roads = db.getRoads();
+  const assets = db.getAssets();
+
+  const userId = (req.query.userId as string) || (req.headers['x-user-id'] as string) || 'USR-001';
+  const users = db.getUsers();
+  const user = users.find((u) => u.id === userId) || users[0];
+
+  const fullReport = generateOfficialInfrastructureAnalysis(project, allProjects, roads, assets, user);
+  const authResult = authorizeAndFilterAnalysis(fullReport, user, project.id);
+
+  if (!authResult.authorized) {
+    return res.json({
+      success: false,
+      accessLevel: authResult.accessLevel,
+      sensitivity: fullReport.sensitivity,
+      report: null,
+      error: authResult.error,
+    });
+  }
+
+  res.json({
+    success: true,
+    accessLevel: authResult.accessLevel,
+    sensitivity: fullReport.sensitivity,
+    report: authResult.sanitizedPayload || fullReport,
+  });
+});
+
+apiRouter.post('/analysis/:projectId/generate-report', (req: Request, res: Response) => {
+  const project = db.getProjectById(req.params.projectId);
+  if (!project) return res.status(404).json({ error: 'Project not found' });
+
+  const allProjects = db.getProjects();
+  const roads = db.getRoads();
+  const assets = db.getAssets();
+
+  const { reportType, userId } = req.body;
+  const users = db.getUsers();
+  const user = users.find((u) => u.id === userId) || users[0];
+
+  const fullReport = generateOfficialInfrastructureAnalysis(project, allProjects, roads, assets, user);
+
+  // Log report generation in audit trail
+  db.logAudit({
+    userId: user.id,
+    userName: user.name,
+    role: user.role,
+    department: user.department,
+    action: 'GENERATE_OFFICIAL_REPORT',
+    entity: 'InfrastructureAnalysisReport',
+    entityId: fullReport.analysisId,
+    ipAddress: req.ip || '127.0.0.1',
+    newValue: `Generated ${reportType || 'INTERNAL_COORDINATION_REPORT'} for ${project.code} (${project.name})`,
+  });
+
+  res.json({
+    success: true,
+    reportType: reportType || 'INTERNAL_COORDINATION_REPORT',
+    analysisId: fullReport.analysisId,
+    version: fullReport.version,
+    generatedAt: new Date().toISOString(),
+    generatedBy: user.name,
+    report: fullReport,
+  });
+});
+
+apiRouter.post('/coordination/reject-plan', (req: Request, res: Response) => {
+  const { projectId, planId, reason, officer, designation, department } = req.body;
+  const project = db.getProjectById(projectId);
+  if (!project) return res.status(404).json({ error: 'Project not found' });
+
+  project.status = 'REJECTED';
+  project.jointPlanStatus = 'REJECTED';
+
+  db.logAudit({
+    userId: 'USR-REJECT',
+    userName: officer || 'Authority Officer',
+    role: designation || 'EXECUTIVE_ENGINEER',
+    department: department || 'Municipal Administration',
+    action: 'REJECT_COORDINATION_PLAN',
+    entity: 'CoordinationPlan',
+    entityId: planId || 'PLAN_A',
+    ipAddress: req.ip || '127.0.0.1',
+    newValue: `Coordination recommendation rejected for ${project.code}. Reason: ${reason || 'Authority rejection'}`,
+  });
+
+  res.json({ success: true, message: 'Coordination plan rejection logged in audit ledger.' });
+});
+

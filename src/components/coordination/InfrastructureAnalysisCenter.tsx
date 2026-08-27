@@ -299,6 +299,19 @@ Authorized by Municipal Commissioner / Collector under MMCA 1949 Section 197.
   };
 
   // -------------------------------------------------------------
+  // LOADING STATE
+  // -------------------------------------------------------------
+  if (isLoading) {
+    return (
+      <div className="p-12 text-center space-y-3">
+        <div className="w-10 h-10 border-4 border-blue-900 border-t-transparent rounded-full animate-spin mx-auto" />
+        <div className="text-xs font-bold text-slate-700">Analyzing Subsurface Infrastructure & Corridor Baseline...</div>
+        <p className="text-[11px] text-slate-500">Cross-referencing CTTP 2016 traffic data, geotechnical depth rules, and multi-agency lookahead windows.</p>
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------
   // ACCESS RESTRICTED / DENIED VIEW (Section 65)
   // -------------------------------------------------------------
   if (error || accessLevel === 'DENIED') {
@@ -318,6 +331,24 @@ Authorized by Municipal Commissioner / Collector under MMCA 1949 Section 197.
         <div className="pt-2 text-[11px] text-slate-400">
           Logged as: <strong className="text-slate-700">{currentUser?.name || 'Public User'}</strong> ({currentUser?.role || 'CITIZEN'})
         </div>
+      </div>
+    );
+  }
+
+  if (!report) {
+    return (
+      <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+        <AlertTriangle className="w-8 h-8 text-amber-600 mx-auto" />
+        <h3 className="font-bold text-slate-900 text-sm">Analysis Not Yet Generated</h3>
+        <p className="text-xs text-slate-500 max-w-md mx-auto">
+          No analysis report is currently available for this project. Run pre-analysis check or refresh the analysis engine.
+        </p>
+        <button
+          onClick={() => fetchAnalysis()}
+          className="px-4 py-2 bg-blue-900 text-white rounded-xl text-xs font-bold hover:bg-blue-950 transition-colors"
+        >
+          Generate Infrastructure Analysis
+        </button>
       </div>
     );
   }
